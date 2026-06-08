@@ -1,0 +1,19 @@
+architectury {
+    common("fabric", "neoforge")
+}
+
+loom {
+    accessWidenerPath = file("src/main/resources/craftstats.accesswidener")
+}
+
+dependencies {
+    minecraft libs.minecraft
+    mappings loom.officialMojangMappings()
+
+    modImplementation libs.fabric.loader
+    modApi             libs.arch.common
+
+    modApi(libs.cloth.config.fabric) {
+        exclude group: "net.fabricmc.fabric-api"
+    }
+}

@@ -1,0 +1,59 @@
+plugins {
+    alias(libs.plugins.arch.plugin)
+    alias(libs.plugins.arch.loom)  apply false
+    alias(libs.plugins.shadow)     apply false
+}
+
+architectury {
+    minecraft = libs.versions.minecraft.get()
+}
+
+allprojects {
+    group   = rootProject.maven_group
+    version = rootProject.mod_version
+}
+
+subprojects {
+    apply plugin: "dev.architectury.loom"
+    apply plugin: "architectury-plugin"
+    apply plugin: "maven-publish"
+
+    // Gradle 8.2+ marks runtimeClasspath as non-declarable; architectury-plugin 3.4.x still needs to add to it
+    configurations.all {
+        if (name == "runtimeClasspath") {
+            setCanBeDeclared(true)
+        }
+    }
+
+    base {
+        archivesName = rootProject.archives_base_name
+    }
+
+    repositories {
+        maven { url = "https://maven.shedaniel.me/" }
+        maven { url = "https://maven.terraformersmc.com/" }
+        maven { url = "https://maven.parchmentmc.org" }
+    }
+
+    java {
+        withSourcesJar()
+        sourceCompatibility = JavaVersion.toVersion(libs.versions.java.get())
+        targetCompatibility = JavaVersion.toVersion(libs.versions.java.get())
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = "UTF-8"
+        options.release   = libs.versions.java.get().toInteger()
+    }
+
+    publishing {
+        publications {
+            mavenJava(MavenPublication) {
+                artifactId = project.archivesBaseName
+                from components.java
+            }
+        }
+        repositories {
+        }
+    }
+}

@@ -1,0 +1,24 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.craftstats.common.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "BlockBehaviourAccessor",
+    "BlockBehaviourMixin",
+    "BlockBehaviourPropertiesAccessor",
+    "BlockBehaviourStateMixin",
+    "BlockMixin",
+    "EntityMixin",
+    "FoodDataMixin",
+    "ItemMixin",
+    "AbstractArrowMixin",
+    "LivingEntityMixin",
+    "MobMixin",
+    "PlayerMixin"
+  ],
+  "client": ["TitleScreenMixin", "PauseScreenMixin"],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

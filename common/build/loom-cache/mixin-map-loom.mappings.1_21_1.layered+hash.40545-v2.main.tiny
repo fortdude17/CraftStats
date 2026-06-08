@@ -1,0 +1,4 @@
+v1	named	intermediary
+FIELD	com/craftstats/common/mixin/FoodDataMixin	I	foodLevel	field_7756
+FIELD	com/craftstats/common/mixin/FoodDataMixin	F	saturationLevel	field_7753
+FIELD	com/craftstats/common/mixin/FoodDataMixin	F	exhaustionLevel	field_7752

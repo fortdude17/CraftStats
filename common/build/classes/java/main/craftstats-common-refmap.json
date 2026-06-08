@@ -1,0 +1,128 @@
+{
+  "mappings": {
+    "com/craftstats/common/mixin/AbstractArrowMixin": {
+      "getBaseDamage": "Lnet/minecraft/class_1665;method_7448()D"
+    },
+    "com/craftstats/common/mixin/BlockBehaviourAccessor": {
+      "properties": "field_23155:Lnet/minecraft/class_4970$class_2251;"
+    },
+    "com/craftstats/common/mixin/BlockBehaviourMixin": {
+      "neighborChanged": "Lnet/minecraft/class_4970;method_9612(Lnet/minecraft/class_2680;Lnet/minecraft/class_1937;Lnet/minecraft/class_2338;Lnet/minecraft/class_2248;Lnet/minecraft/class_2338;Z)V",
+      "onPlace": "Lnet/minecraft/class_4970;method_9615(Lnet/minecraft/class_2680;Lnet/minecraft/class_1937;Lnet/minecraft/class_2338;Lnet/minecraft/class_2680;Z)V",
+      "tick": "Lnet/minecraft/class_4970;method_9588(Lnet/minecraft/class_2680;Lnet/minecraft/class_3218;Lnet/minecraft/class_2338;Lnet/minecraft/class_5819;)V"
+    },
+    "com/craftstats/common/mixin/BlockBehaviourPropertiesAccessor": {
+      "destroyTime": "field_10669:F",
+      "hasCollision": "field_10664:Z"
+    },
+    "com/craftstats/common/mixin/BlockBehaviourStateMixin": {
+      "getCollisionShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/shapes/CollisionContext;)Lnet/minecraft/world/phys/shapes/VoxelShape;": "Lnet/minecraft/class_4970$class_4971;method_26194(Lnet/minecraft/class_1922;Lnet/minecraft/class_2338;Lnet/minecraft/class_3726;)Lnet/minecraft/class_265;",
+      "getDestroySpeed": "Lnet/minecraft/class_4970$class_4971;method_26214(Lnet/minecraft/class_1922;Lnet/minecraft/class_2338;)F",
+      "getLightEmission": "Lnet/minecraft/class_4970$class_4971;method_26213()I",
+      "getPistonPushReaction": "Lnet/minecraft/class_4970$class_4971;method_26223()Lnet/minecraft/class_3619;",
+      "requiresCorrectToolForDrops": "Lnet/minecraft/class_4970$class_4971;method_29291()Z",
+      "spawnAfterBreak": "Lnet/minecraft/class_4970$class_4971;method_26180(Lnet/minecraft/class_3218;Lnet/minecraft/class_2338;Lnet/minecraft/class_1799;Z)V"
+    },
+    "com/craftstats/common/mixin/BlockMixin": {
+      "getExplosionResistance": "Lnet/minecraft/class_2248;method_9520()F",
+      "getFriction": "Lnet/minecraft/class_2248;method_9499()F"
+    },
+    "com/craftstats/common/mixin/EntityMixin": {
+      "isOnFire": "Lnet/minecraft/class_1297;method_5809()Z"
+    },
+    "com/craftstats/common/mixin/FoodDataMixin": {
+      "tick": "Lnet/minecraft/class_1702;method_7588(Lnet/minecraft/class_1657;)V"
+    },
+    "com/craftstats/common/mixin/ItemMixin": {
+      "getMaxDamage": "Lnet/minecraft/class_1799;method_7936()I",
+      "getMaxStackSize": "Lnet/minecraft/class_1799;method_7914()I"
+    },
+    "com/craftstats/common/mixin/LivingEntityMixin": {
+      "causeFallDamage": "Lnet/minecraft/class_1309;method_5747(FFLnet/minecraft/class_1282;)Z",
+      "dropAllDeathLoot": "Lnet/minecraft/class_1309;method_16080(Lnet/minecraft/class_3218;Lnet/minecraft/class_1282;)V",
+      "getExperienceReward": "Lnet/minecraft/class_1309;method_59923(Lnet/minecraft/class_3218;Lnet/minecraft/class_1297;)I",
+      "getMaxHealth": "Lnet/minecraft/class_1309;method_6063()F",
+      "hurt": "Lnet/minecraft/class_1309;method_5643(Lnet/minecraft/class_1282;F)Z",
+      "onClimbable": "Lnet/minecraft/class_1309;method_6101()Z",
+      "tick": "Lnet/minecraft/class_1309;method_5773()V"
+    },
+    "com/craftstats/common/mixin/MobMixin": {
+      "removeWhenFarAway": "Lnet/minecraft/class_1308;method_5974(D)Z"
+    },
+    "com/craftstats/common/mixin/PauseScreenMixin": {
+      "init": "Lnet/minecraft/class_433;method_25426()V"
+    },
+    "com/craftstats/common/mixin/PlayerMixin": {
+      "attack": "Lnet/minecraft/class_1657;method_7324(Lnet/minecraft/class_1297;)V",
+      "giveExperiencePoints": "Lnet/minecraft/class_1657;method_7255(I)V",
+      "tick": "Lnet/minecraft/class_1657;method_5773()V"
+    },
+    "com/craftstats/common/mixin/TitleScreenMixin": {
+      "init": "Lnet/minecraft/class_442;method_25426()V"
+    }
+  },
+  "data": {
+    "named:intermediary": {
+      "com/craftstats/common/mixin/AbstractArrowMixin": {
+        "getBaseDamage": "Lnet/minecraft/class_1665;method_7448()D"
+      },
+      "com/craftstats/common/mixin/BlockBehaviourAccessor": {
+        "properties": "field_23155:Lnet/minecraft/class_4970$class_2251;"
+      },
+      "com/craftstats/common/mixin/BlockBehaviourMixin": {
+        "neighborChanged": "Lnet/minecraft/class_4970;method_9612(Lnet/minecraft/class_2680;Lnet/minecraft/class_1937;Lnet/minecraft/class_2338;Lnet/minecraft/class_2248;Lnet/minecraft/class_2338;Z)V",
+        "onPlace": "Lnet/minecraft/class_4970;method_9615(Lnet/minecraft/class_2680;Lnet/minecraft/class_1937;Lnet/minecraft/class_2338;Lnet/minecraft/class_2680;Z)V",
+        "tick": "Lnet/minecraft/class_4970;method_9588(Lnet/minecraft/class_2680;Lnet/minecraft/class_3218;Lnet/minecraft/class_2338;Lnet/minecraft/class_5819;)V"
+      },
+      "com/craftstats/common/mixin/BlockBehaviourPropertiesAccessor": {
+        "destroyTime": "field_10669:F",
+        "hasCollision": "field_10664:Z"
+      },
+      "com/craftstats/common/mixin/BlockBehaviourStateMixin": {
+        "getCollisionShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/shapes/CollisionContext;)Lnet/minecraft/world/phys/shapes/VoxelShape;": "Lnet/minecraft/class_4970$class_4971;method_26194(Lnet/minecraft/class_1922;Lnet/minecraft/class_2338;Lnet/minecraft/class_3726;)Lnet/minecraft/class_265;",
+        "getDestroySpeed": "Lnet/minecraft/class_4970$class_4971;method_26214(Lnet/minecraft/class_1922;Lnet/minecraft/class_2338;)F",
+        "getLightEmission": "Lnet/minecraft/class_4970$class_4971;method_26213()I",
+        "getPistonPushReaction": "Lnet/minecraft/class_4970$class_4971;method_26223()Lnet/minecraft/class_3619;",
+        "requiresCorrectToolForDrops": "Lnet/minecraft/class_4970$class_4971;method_29291()Z",
+        "spawnAfterBreak": "Lnet/minecraft/class_4970$class_4971;method_26180(Lnet/minecraft/class_3218;Lnet/minecraft/class_2338;Lnet/minecraft/class_1799;Z)V"
+      },
+      "com/craftstats/common/mixin/BlockMixin": {
+        "getExplosionResistance": "Lnet/minecraft/class_2248;method_9520()F",
+        "getFriction": "Lnet/minecraft/class_2248;method_9499()F"
+      },
+      "com/craftstats/common/mixin/EntityMixin": {
+        "isOnFire": "Lnet/minecraft/class_1297;method_5809()Z"
+      },
+      "com/craftstats/common/mixin/FoodDataMixin": {
+        "tick": "Lnet/minecraft/class_1702;method_7588(Lnet/minecraft/class_1657;)V"
+      },
+      "com/craftstats/common/mixin/ItemMixin": {
+        "getMaxDamage": "Lnet/minecraft/class_1799;method_7936()I",
+        "getMaxStackSize": "Lnet/minecraft/class_1799;method_7914()I"
+      },
+      "com/craftstats/common/mixin/LivingEntityMixin": {
+        "causeFallDamage": "Lnet/minecraft/class_1309;method_5747(FFLnet/minecraft/class_1282;)Z",
+        "dropAllDeathLoot": "Lnet/minecraft/class_1309;method_16080(Lnet/minecraft/class_3218;Lnet/minecraft/class_1282;)V",
+        "getExperienceReward": "Lnet/minecraft/class_1309;method_59923(Lnet/minecraft/class_3218;Lnet/minecraft/class_1297;)I",
+        "getMaxHealth": "Lnet/minecraft/class_1309;method_6063()F",
+        "hurt": "Lnet/minecraft/class_1309;method_5643(Lnet/minecraft/class_1282;F)Z",
+        "onClimbable": "Lnet/minecraft/class_1309;method_6101()Z",
+        "tick": "Lnet/minecraft/class_1309;method_5773()V"
+      },
+      "com/craftstats/common/mixin/MobMixin": {
+        "removeWhenFarAway": "Lnet/minecraft/class_1308;method_5974(D)Z"
+      },
+      "com/craftstats/common/mixin/PauseScreenMixin": {
+        "init": "Lnet/minecraft/class_433;method_25426()V"
+      },
+      "com/craftstats/common/mixin/PlayerMixin": {
+        "attack": "Lnet/minecraft/class_1657;method_7324(Lnet/minecraft/class_1297;)V",
+        "giveExperiencePoints": "Lnet/minecraft/class_1657;method_7255(I)V",
+        "tick": "Lnet/minecraft/class_1657;method_5773()V"
+      },
+      "com/craftstats/common/mixin/TitleScreenMixin": {
+        "init": "Lnet/minecraft/class_442;method_25426()V"
+      }
+    }
+  }
+}

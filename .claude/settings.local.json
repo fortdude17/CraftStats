@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem \"E:\\\\DOWNLOADS\\\\CraftStats\")",
+      "Bash(Select-Object Name, LastWriteTime)"
+    ]
+  }
+}

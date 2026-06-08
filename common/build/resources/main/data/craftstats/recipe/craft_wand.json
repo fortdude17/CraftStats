@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "_G_",
+    "GNG",
+    "_B_"
+  ],
+  "key": {
+    "G": { "item": "minecraft:gold_ingot" },
+    "N": { "item": "minecraft:nether_star" },
+    "B": { "item": "minecraft:blaze_rod" }
+  },
+  "result": {
+    "id": "craftstats:craft_wand",
+    "count": 1
+  }
+}

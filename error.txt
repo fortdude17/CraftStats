@@ -1,0 +1,132 @@
+[12:45:12] [main] [FabricLoader/Mixin/ERROR]: Mixin apply for mod craftstats failed craftstats-common.mixins.json:BlockBehaviourStateMixin from mod craftstats -> net.minecraft.class_4970$class_4971: org.spongepowered.asm.mixin.injection.throwables.InvalidInjectionException Invalid descriptor on craftstats-common.mixins.json:BlockBehaviourStateMixin from mod craftstats->@Inject::craftstats$noCollision(Lnet/minecraft/class_1922;Lnet/minecraft/class_2338;Lnet/minecraft/class_3726;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V! Expected (Lnet/minecraft/class_1922;Lnet/minecraft/class_2338;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V but found (Lnet/minecraft/class_1922;Lnet/minecraft/class_2338;Lnet/minecraft/class_3726;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V [INJECT_APPLY Applicator Phase -> craftstats-common.mixins.json:BlockBehaviourStateMixin from mod craftstats -> Apply Injections ->  -> Inject -> craftstats-common.mixins.json:BlockBehaviourStateMixin from mod craftstats->@Inject::craftstats$noCollision(Lnet/minecraft/class_1922;Lnet/minecraft/class_2338;Lnet/minecraft/class_3726;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V]
+org.spongepowered.asm.mixin.injection.throwables.InvalidInjectionException: Invalid descriptor on craftstats-common.mixins.json:BlockBehaviourStateMixin from mod craftstats->@Inject::craftstats$noCollision(Lnet/minecraft/class_1922;Lnet/minecraft/class_2338;Lnet/minecraft/class_3726;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V! Expected (Lnet/minecraft/class_1922;Lnet/minecraft/class_2338;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V but found (Lnet/minecraft/class_1922;Lnet/minecraft/class_2338;Lnet/minecraft/class_3726;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V [INJECT_APPLY Applicator Phase -> craftstats-common.mixins.json:BlockBehaviourStateMixin from mod craftstats -> Apply Injections ->  -> Inject -> craftstats-common.mixins.json:BlockBehaviourStateMixin from mod craftstats->@Inject::craftstats$noCollision(Lnet/minecraft/class_1922;Lnet/minecraft/class_2338;Lnet/minecraft/class_3726;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V]
+        at org.spongepowered.asm.mixin.injection.callback.CallbackInjector.inject(CallbackInjector.java:563)
+        at org.spongepowered.asm.mixin.injection.callback.CallbackInjector.inject(CallbackInjector.java:493)
+        at org.spongepowered.asm.mixin.injection.code.Injector.inject(Injector.java:284)
+        at org.spongepowered.asm.mixin.injection.struct.InjectionInfo.inject(InjectionInfo.java:508)
+        at org.spongepowered.asm.mixin.transformer.MixinTargetContext.applyInjections(MixinTargetContext.java:1470)
+        at org.spongepowered.asm.mixin.transformer.MixinApplicatorStandard.applyInjections(MixinApplicatorStandard.java:832)
+        at org.spongepowered.asm.mixin.transformer.MixinApplicatorStandard.lambda$runApplicatorPass$7(MixinApplicatorStandard.java:362)
+        at org.spongepowered.asm.mixin.transformer.MixinApplicatorStandard.processMixins(MixinApplicatorStandard.java:381)
+        at org.spongepowered.asm.mixin.transformer.MixinApplicatorStandard.runApplicatorPass(MixinApplicatorStandard.java:360)
+        at org.spongepowered.asm.mixin.transformer.MixinApplicatorStandard.apply(MixinApplicatorStandard.java:240)
+        at org.spongepowered.asm.mixin.transformer.TargetClassContext.apply(TargetClassContext.java:437)
+        at org.spongepowered.asm.mixin.transformer.TargetClassContext.applyMixins(TargetClassContext.java:418)
+        at org.spongepowered.asm.mixin.transformer.MixinProcessor.applyMixins(MixinProcessor.java:351)
+        at org.spongepowered.asm.mixin.transformer.MixinTransformer.transformClass(MixinTransformer.java:237)
+        at org.spongepowered.asm.mixin.transformer.MixinTransformer.transformClassBytes(MixinTransformer.java:202)
+        at net.fabricmc.loader.impl.launch.knot.KnotClassDelegate.getPostMixinClassByteArray(KnotClassDelegate.java:435)
+        at net.fabricmc.loader.impl.launch.knot.KnotClassDelegate.tryLoadClass(KnotClassDelegate.java:336)
+        at net.fabricmc.loader.impl.launch.knot.KnotClassDelegate.loadClass(KnotClassDelegate.java:231)
+        at net.fabricmc.loader.impl.launch.knot.KnotClassLoader.loadClass(KnotClassLoader.java:119)
+        at java.base/java.lang.ClassLoader.loadClass(Unknown Source)
+        at java.base/java.lang.ClassLoader.defineClass1(Native Method)
+        at java.base/java.lang.ClassLoader.defineClass(Unknown Source)
+        at java.base/java.security.SecureClassLoader.defineClass(Unknown Source)
+        at net.fabricmc.loader.impl.launch.knot.KnotClassLoader.defineClassFwd(KnotClassLoader.java:165)
+        at net.fabricmc.loader.impl.launch.knot.KnotClassDelegate.tryLoadClass(KnotClassDelegate.java:368)
+        at net.fabricmc.loader.impl.launch.knot.KnotClassDelegate.loadClass(KnotClassDelegate.java:231)
+        at net.fabricmc.loader.impl.launch.knot.KnotClassLoader.loadClass(KnotClassLoader.java:119)
+        at java.base/java.lang.ClassLoader.loadClass(Unknown Source)
+        at knot//net.minecraft.class_2246.<clinit>(class_2246.java:48)
+        at knot//net.minecraft.class_2358.method_10199(class_2358.java:336)
+        at knot//net.minecraft.class_2966.method_12851(class_2966.java:52)
+        at knot//net.minecraft.client.main.Main.main(Main.java:130)
+        at net.fabricmc.loader.impl.game.minecraft.MinecraftGameProvider.launch(MinecraftGameProvider.java:514)
+        at net.fabricmc.loader.impl.launch.knot.Knot.launch(Knot.java:72)
+        at net.fabricmc.loader.impl.launch.knot.KnotClient.main(KnotClient.java:23)
+        at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(Unknown Source)
+        at java.base/java.lang.reflect.Method.invoke(Unknown Source)
+        at com.modrinth.theseus.MinecraftLaunch.relaunch(MinecraftLaunch.java:63)
+        at com.modrinth.theseus.MinecraftLaunch.main(MinecraftLaunch.java:28)
+[12:45:12] [main] [net.minecraft.class_6396/WARN]: Failed to get system info for GL Caps
+java.lang.IllegalStateException: Rendersystem called from wrong thread
+        at knot//com.mojang.blaze3d.systems.RenderSystem.constructThreadException(RenderSystem.java:140)
+        at knot//com.mojang.blaze3d.systems.RenderSystem.assertOnRenderThread(RenderSystem.java:135)
+        at knot//com.mojang.blaze3d.systems.RenderSystem.getCapsString(RenderSystem.java:527)
+        at knot//net.minecraft.class_6396.method_37123(class_6396.java:70)
+        at knot//net.minecraft.class_310.method_37274(class_310.java:2547)
+        at knot//net.minecraft.class_310.method_22681(class_310.java:2517)
+        at knot//net.minecraft.client.main.Main.main(Main.java:210)
+        at net.fabricmc.loader.impl.game.minecraft.MinecraftGameProvider.launch(MinecraftGameProvider.java:514)
+        at net.fabricmc.loader.impl.launch.knot.Knot.launch(Knot.java:72)
+        at net.fabricmc.loader.impl.launch.knot.KnotClient.main(KnotClient.java:23)
+        at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(Unknown Source)
+        at java.base/java.lang.reflect.Method.invoke(Unknown Source)
+        at com.modrinth.theseus.MinecraftLaunch.relaunch(MinecraftLaunch.java:63)
+        at com.modrinth.theseus.MinecraftLaunch.main(MinecraftLaunch.java:28)
+---- Minecraft Crash Report ----
+// I let you down. Sorry :(
+Time: 2026-06-06 12:45:12
+Description: Bootstrap
+java.lang.BootstrapMethodError: java.lang.RuntimeException: Mixin transformation of net.minecraft.class_4970$class_4971 failed
+        at knot//net.minecraft.class_2246.
+(class_2246.java:48)
+        at knot//net.minecraft.class_2358.method_10199(class_2358.java:336)
+        at knot//net.minecraft.class_2966.method_12851(class_2966.java:52)
+        at knot//net.minecraft.client.main.Main.main(Main.java:130)
+        at net.fabricmc.loader.impl.game.minecraft.MinecraftGameProvider.launch(MinecraftGameProvider.java:514)
+        at net.fabricmc.loader.impl.launch.knot.Knot.launch(Knot.java:72)
+        at net.fabricmc.loader.impl.launch.knot.KnotClient.main(KnotClient.java:23)
+        at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(Unknown Source)
+        at java.base/java.lang.reflect.Method.invoke(Unknown Source)
+        at com.modrinth.theseus.MinecraftLaunch.relaunch(MinecraftLaunch.java:63)
+        at com.modrinth.theseus.MinecraftLaunch.main(MinecraftLaunch.java:28)
+Caused by: java.lang.RuntimeException: Mixin transformation of net.minecraft.class_4970$class_4971 failed
+        at net.fabricmc.loader.impl.launch.knot.KnotClassDelegate.getPostMixinClassByteArray(KnotClassDelegate.java:440)
+        at net.fabricmc.loader.impl.launch.knot.KnotClassDelegate.tryLoadClass(KnotClassDelegate.java:336)
+        at net.fabricmc.loader.impl.launch.knot.KnotClassDelegate.loadClass(KnotClassDelegate.java:231)
+        at net.fabricmc.loader.impl.launch.knot.KnotClassLoader.loadClass(KnotClassLoader.java:119)
+        at java.base/java.lang.ClassLoader.loadClass(Unknown Source)
+        at java.base/java.lang.ClassLoader.defineClass1(Native Method)
+        at java.base/java.lang.ClassLoader.defineClass(Unknown Source)
+        at java.base/java.security.SecureClassLoader.defineClass(Unknown Source)
+        at net.fabricmc.loader.impl.launch.knot.KnotClassLoader.defineClassFwd(KnotClassLoader.java:165)
+        at net.fabricmc.loader.impl.launch.knot.KnotClassDelegate.tryLoadClass(KnotClassDelegate.java:368)
+        at net.fabricmc.loader.impl.launch.knot.KnotClassDelegate.loadClass(KnotClassDelegate.java:231)
+        at net.fabricmc.loader.impl.launch.knot.KnotClassLoader.loadClass(KnotClassLoader.java:119)
+        at java.base/java.lang.ClassLoader.loadClass(Unknown Source)
+        ... 11 more
+Caused by: org.spongepowered.asm.mixin.transformer.throwables.MixinTransformerError: An unexpected critical error was encountered
+        at org.spongepowered.asm.mixin.transformer.MixinProcessor.applyMixins(MixinProcessor.java:380)
+        at org.spongepowered.asm.mixin.transformer.MixinTransformer.transformClass(MixinTransformer.java:237)
+        at org.spongepowered.asm.mixin.transformer.MixinTransformer.transformClassBytes(MixinTransformer.java:202)
+        at net.fabricmc.loader.impl.launch.knot.KnotClassDelegate.getPostMixinClassByteArray(KnotClassDelegate.java:435)
+        ... 23 more
+Caused by: org.spongepowered.asm.mixin.throwables.MixinApplyError: Mixin [craftstats-common.mixins.json:BlockBehaviourStateMixin from mod craftstats] from phase [DEFAULT] in config [craftstats-common.mixins.json] FAILED during APPLY
+        at org.spongepowered.asm.mixin.transformer.MixinProcessor.handleMixinError(MixinProcessor.java:685)
+        at org.spongepowered.asm.mixin.transformer.MixinProcessor.handleMixinApplyError(MixinProcessor.java:636)
+        at org.spongepowered.asm.mixin.transformer.MixinProcessor.applyMixins(MixinProcessor.java:367)
+        ... 26 more
+Caused by: org.spongepowered.asm.mixin.injection.throwables.InvalidInjectionException: Invalid descriptor on craftstats-common.mixins.json:BlockBehaviourStateMixin from mod craftstats->@Inject::craftstats$noCollision(Lnet/minecraft/class_1922;Lnet/minecraft/class_2338;Lnet/minecraft/class_3726;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V! Expected (Lnet/minecraft/class_1922;Lnet/minecraft/class_2338;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V but found (Lnet/minecraft/class_1922;Lnet/minecraft/class_2338;Lnet/minecraft/class_3726;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V [INJECT_APPLY Applicator Phase -> craftstats-common.mixins.json:BlockBehaviourStateMixin from mod craftstats -> Apply Injections ->  -> Inject -> craftstats-common.mixins.json:BlockBehaviourStateMixin from mod craftstats->@Inject::craftstats$noCollision(Lnet/minecraft/class_1922;Lnet/minecraft/class_2338;Lnet/minecraft/class_3726;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V]
+        at org.spongepowered.asm.mixin.injection.callback.CallbackInjector.inject(CallbackInjector.java:563)
+        at org.spongepowered.asm.mixin.injection.callback.CallbackInjector.inject(CallbackInjector.java:493)
+        at org.spongepowered.asm.mixin.injection.code.Injector.inject(Injector.java:284)
+        at org.spongepowered.asm.mixin.injection.struct.InjectionInfo.inject(InjectionInfo.java:508)
+        at org.spongepowered.asm.mixin.transformer.MixinTargetContext.applyInjections(MixinTargetContext.java:1470)
+        at org.spongepowered.asm.mixin.transformer.MixinApplicatorStandard.applyInjections(MixinApplicatorStandard.java:832)
+        at org.spongepowered.asm.mixin.transformer.MixinApplicatorStandard.lambda$runApplicatorPass$7(MixinApplicatorStandard.java:362)
+        at org.spongepowered.asm.mixin.transformer.MixinApplicatorStandard.processMixins(MixinApplicatorStandard.java:381)
+        at org.spongepowered.asm.mixin.transformer.MixinApplicatorStandard.runApplicatorPass(MixinApplicatorStandard.java:360)
+        at org.spongepowered.asm.mixin.transformer.MixinApplicatorStandard.apply(MixinApplicatorStandard.java:240)
+        at org.spongepowered.asm.mixin.transformer.TargetClassContext.apply(TargetClassContext.java:437)
+        at org.spongepowered.asm.mixin.transformer.TargetClassContext.applyMixins(TargetClassContext.java:418)
+        at org.spongepowered.asm.mixin.transformer.MixinProcessor.applyMixins(MixinProcessor.java:351)
+        ... 26 more
+A detailed walkthrough of the error, its code path and all known details is as follows:
+---------------------------------------------------------------------------------------
+-- Head --
+Thread: main
+Stacktrace:
+        at knot//net.minecraft.class_2246.
+GFLW Platform:
+GL Caps: ERR
+        GL debug messages:
+Is Modded: Definitely; Client brand changed to 'fabric'
+        Universe: 404
+        Type: Client (map_client.txt)
+        Locale: en_US
+        System encoding: Cp1252
+        File encoding: UTF-8
+        CPU:
+#@!@# Game crashed! Crash report saved to: #@!@# C:\Users\{COMPUTER_USERNAME}\AppData\Roaming\ModrinthApp\profiles\Fabric 1.21.1\crash-reports\crash-2026-06-06_12.45.12-client.txt

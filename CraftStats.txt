@@ -1,0 +1,58 @@
+Build a Minecraft mod called CraftStats targeting both Fabric (versions 1.21.1 through latest) and NeoForge (versions 1.21.1 through latest) using Architectury API so a single shared codebase compiles to both loaders. Use Java 21. The mod is a universal in-game stats editor that lets players inspect, edit, randomize, save, and propagate the properties of any block, mob, item, entity, or player in real time using a polished custom GUI system.
+
+Core Tool — The Craft Wand:
+Craft a "Craft Wand" item (recipe: blaze rod + nether star + 3 gold ingots in a cross shape). Right-clicking any block, mob, or entity opens the full stat editor GUI for that target. Left-clicking copies the target's current stat profile to clipboard as formatted JSON. Shift + right-click activates Randomize Mode. The wand has a custom item model defined via a resource pack bundled with the mod. The wand requires operator or creative mode by default (configurable). Include a /craftstats give <player> command to grant it without crafting.
+
+GUI System:
+Build a custom full-screen GUI using the platform's screen API (Fabric Screen API on Fabric, NeoForge's equivalent on NeoForge, shared logic in the common module via Architectury). The GUI has three main regions:
+Left panel — Entity browser. Four type tabs at the top: mob, block, item, player. Below that, a live search bar that filters the list in real time as the player types. Below that, a scrollable list of all entities/blocks/items grouped by subcategory (hostile, passive, neutral for mobs; falling, explosive, special for blocks; weapon, tool, food, consumable for items; and fixed categories for player). Clicking any entry loads it into the editor on the right and highlights it in the list.
+Right panel — Stat editor. A target header bar at the top showing the selected entity's namespaced ID and category. Tabs below the header switch between stat categories (combat, movement, ai, drops for mobs; physics, properties, rendering for blocks; combat, durability, food, flags for items; combat, movement, hunger, flags for player). Each tab renders stat sections with free-form number inputs — no min or max limits, the player can type or paste any value they want including negatives and decimals. Each numeric input also has small increment/decrement stepper buttons for fine-tuning. Boolean flags render as toggle switches. Enum selections render as pill selectors. Text fields (item IDs, loot table paths) render as plain text inputs.
+Footer bar — shows live/connected status, unsaved change count, reset button, and apply button.
+
+Mob / Entity Stats — Tabs: Combat, Movement, AI, Drops:
+Combat: max health, attack damage, armor points, knockback resistance. Immunity toggles: fire, fall, drown, explosion, poison, magic. Movement: move speed, jump force, follow range, size scale, pathfinding mode pill (ground/swim/fly/climb/phase). AI: behavior mode pill (passive/neutral/hostile/flee/guard), flee threshold, attack cooldown in ticks, aggro range, despawn range. AI flag toggles: burns in daylight, can despawn, tameable, baby variant. Drops: XP reward, drop chance, loot table path text input, max drop count. Propagate button at bottom of drops tab.
+
+Block Stats — Tabs: Physics, Properties, Rendering:
+Physics: physics mode pill (static/gravity/float/bounce/liquid), hardness, blast resistance, slipperiness, bounce factor. Properties: light emission, opacity, flammability, tick rate. Flag toggles: ticks, spreads, growable, replaceable, climbable, waterloggable. Rendering: render layer pill (solid/cutout/translucent), scale, ambient occlusion, luminance, map color ID. Propagate button at bottom of rendering tab.
+
+Item Stats — Tabs: Combat, Durability, Food, Flags:
+Combat: attack damage, attack speed, enchantability, sweep multiplier. Durability: max durability, stack size (1–unlimited), mining speed, repair material text input. Durability toggles: fireproof, unbreakable, consumed on use, item glow. Food: nutrition, saturation, eat duration, on-eat effect ID text input. Food toggles: is food, always edible, fast eat, is meat. Flags: category toggles (weapon, tool, armor, throwable, boomerang, projectile).
+
+Player Stats — Tabs: Combat, Movement, Hunger, Flags:
+These stats edit the local player or a targeted player entity. Combat: max health, base damage, attack speed, reach distance, crit multiplier, invincibility frames. Movement: walk speed, sprint speed, fly speed, jump force, step height, swim speed. Movement toggles: no fall damage, no clip, infinite sprint, instant swim. Hunger: max food level, regen threshold, hunger drain rate, exhaustion cap. Flags: keep inventory, fire immune, drown immune, one hit kill, god mode, infinite items.
+
+Preset System:
+Every target type ships with four built-in read-only presets: vanilla default, overpowered, glass cannon, chaos. Players can save custom presets as named JSON files to .minecraft/craftstats/presets/. A preset browser panel accessible from a button in the target header lists all saved presets with load, rename, delete, and diff buttons. The diff button shows a two-column comparison between the preset values and current vanilla defaults, highlighting changed fields. Import and export presets as JSON strings via a copy/paste text area in the GUI. Presets are typed and warn on type mismatch when loading. Presets store all numeric values, toggle states, and pill selections for that target type. A seed field in each preset lets players share reproducible randomized builds.
+
+Randomize Mode:
+Activated by shift + right-clicking with the Craft Wand. Instead of opening the normal editor, a randomize preview screen appears showing a two-column diff — original value on the left, new randomized value on the right. Individual stats can be rerolled without affecting others. A reroll all button generates a completely fresh set. A seed input lets players enter a specific number to get a reproducible randomized result. Three intensity levels are set in the config: mild (all stats within ±20% of vanilla defaults), wild (up to ±200% of vanilla), chaos (completely unconstrained, any value within Java numeric limits). A confirm button applies the randomized values. The randomize screen also has a save as preset button to immediately store the randomized result.
+
+Propagate Feature:
+Available at the bottom of the drops tab (mobs) and rendering tab (blocks). Clicking propagate shows a confirmation panel displaying the target type, the count of loaded instances in loaded chunks that will be affected, and a diff of which properties are changing and by how much. Requires the player to type CONFIRM in a text field before executing, to prevent accidental mass changes. Supports per-instance mode (only this one entity) and global mode (all loaded entities of this type). Stores one undo state in memory per session — a single undo propagate action is available immediately after propagating.
+
+Copy and Paste Stats:
+A copy profile button in the target header exports all current stats for the selected target as a minified JSON string to clipboard. A paste profile button reads from clipboard and applies matching fields to the currently targeted entity, skipping mismatched fields silently. A paste with diff button shows what will change before applying. Profiles include a type field so the mod can detect and warn on type mismatches.
+
+Commands:
+
+/craftstats give <player> — gives the Craft Wand to a player
+/craftstats reload — hot-reloads the config without restarting
+/craftstats reset <target> — resets a targeted entity to vanilla defaults
+/craftstats preset load <name> <target> — loads a named preset onto a target from command line
+/craftstats randomize <target> [seed] [intensity] — randomizes a target from command line
+
+
+Permissions and Config (Cloth Config):
+Config file at .minecraft/craftstats/config.json, also exposed as an in-game screen via Mod Menu. Options: require_op (default true), allow_survival (default false), randomize_intensity (mild/wild/chaos), randomize_seed_override, per-feature enable/disable toggles (block editor, mob editor, item editor, player editor, randomize, propagate, presets), blacklist array of namespaced IDs that cannot be edited, max_scale_cap (default 100.0), persist_changes_on_restart (default false), confirm_propagate (default true).
+
+Tech Stack:
+
+Architectury API for shared common module
+Fabric 1.21.1+ and NeoForge 1.21.1+ as separate subprojects
+Java 21
+Cloth Config for config and Mod Menu integration
+Fabric Screen API / NeoForge screen equivalent via Architectury abstraction
+Mixins for injecting into Block, EntityType, LivingEntity, Item, and AbstractArrow classes
+Gson for JSON preset serialization
+Bundled resource pack for Craft Wand custom model
+Include fabric.mod.json, neoforge.mods.toml, full mixin configs for both platforms, Gradle multi-project build with a shared common subproject, and a fabric and neoforge subproject each depending on common

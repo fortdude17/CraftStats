@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "craftstats",
+  "version": "1.0.0",
+  "name": "CraftStats!",
+  "description": "Universal in-game stats editor for mobs, blocks, items and players.",
+  "authors": ["Fortdude21"],
+  "contact": {
+    "homepage": "https://github.com/lhaze/craftstats",
+    "issues": "https://github.com/lhaze/craftstats/issues"
+  },
+  "license": "MIT",
+  "icon": "assets/craftstats/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["com.craftstats.fabric.CraftStatsFabric"],
+    "client": ["com.craftstats.fabric.CraftStatsClientFabric"]
+  },
+  "mixins": [
+    "craftstats-common.mixins.json",
+    "craftstats-fabric.mixins.json"
+  ],
+  "dependencies": {
+    "fabricloader": ">=0.16.0",
+    "fabric-api": "*",
+    "architectury": ">=13.0.0",
+    "minecraft": "~1.21.1",
+    "java": ">=21"
+  },
+  "custom": {
+    "modmenu": {
+      "config_factory": "com.craftstats.fabric.config.CraftStatsModMenuConfig"
+    }
+  }
+}

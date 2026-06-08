@@ -1,0 +1,49 @@
+[versions]
+# Core
+minecraft           = "1.21.1"
+java                = "21"
+
+# Architectury toolchain
+arch-plugin         = "3.4.161"
+arch-loom           = "1.7-SNAPSHOT"
+architectury        = "13.0.8"
+
+# Loaders
+fabric-loader       = "0.16.9"
+fabric-api          = "0.116.12+1.21.1"
+neoforge            = "21.1.172"
+
+# Mappings (parchment — swap loom.officialMojangMappings() for loom.layered if needed)
+parchment-mc        = "1.21.1"
+parchment           = "2024.07.28"
+
+# Mod dependencies
+cloth-config        = "15.0.140"
+modmenu             = "11.0.3"
+
+# Build plugins
+shadow              = "8.3.3"
+
+# ──────────────────────────────────────────────────────────────
+[libraries]
+minecraft               = { module = "com.mojang:minecraft",                     version.ref = "minecraft" }
+
+arch-common             = { module = "dev.architectury:architectury",            version.ref = "architectury" }
+arch-fabric             = { module = "dev.architectury:architectury-fabric",     version.ref = "architectury" }
+arch-neoforge           = { module = "dev.architectury:architectury-neoforge",   version.ref = "architectury" }
+
+fabric-loader           = { module = "net.fabricmc:fabric-loader",              version.ref = "fabric-loader" }
+fabric-api              = { module = "net.fabricmc.fabric-api:fabric-api",      version.ref = "fabric-api" }
+
+neoforge                = { module = "net.neoforged:neoforge",                  version.ref = "neoforge" }
+
+cloth-config-fabric     = { module = "me.shedaniel.cloth:cloth-config-fabric",  version.ref = "cloth-config" }
+cloth-config-neoforge   = { module = "me.shedaniel.cloth:cloth-config-neoforge",version.ref = "cloth-config" }
+
+modmenu                 = { module = "com.terraformersmc:modmenu",               version.ref = "modmenu" }
+
+# ──────────────────────────────────────────────────────────────
+[plugins]
+arch-plugin     = { id = "architectury-plugin",   version.ref = "arch-plugin" }
+arch-loom       = { id = "dev.architectury.loom", version.ref = "arch-loom"   }
+shadow          = { id = "com.gradleup.shadow",   version.ref = "shadow"      }

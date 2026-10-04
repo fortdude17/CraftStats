@@ -9,7 +9,7 @@ An in-game editor for the stats of mobs, blocks, items and players. Pick somethi
 | 1.21.1 (also loads on 1.21) | ✅ | ✅ (NeoForge 21.1) |
 | 1.21.11 | ✅ | ✅ (NeoForge 21.11) |
 
-Each Minecraft version has its own jar. Use the one whose name matches your game version (`craftstats-fabric-1.1.0+1.21.11.jar`, ...).
+Each Minecraft version has its own jar. Use the one whose name matches your game version (`craftstats-fabric-1.1.2+1.21.11.jar`, ...).
 
 **Required:** [Architectury API](https://modrinth.com/mod/architectury-api) (13.x for 1.21.1, 19.x for 1.21.11), and on Fabric also [Fabric API](https://modrinth.com/mod/fabric-api).
 **Optional:** [Mod Menu](https://modrinth.com/mod/modmenu) on Fabric for the config button. Cloth Config is no longer needed.
@@ -18,7 +18,9 @@ The mod must be installed on the server *and* on clients.
 
 ## Getting the jars
 
-Every push to GitHub builds both versions for both loaders. Open the **Actions** tab, click the latest successful **Build** run, and download the `craftstats-mc1.21.1` or `craftstats-mc1.21.11` artifact (a zip containing the Fabric and NeoForge jars).
+Download them from the [Releases page](https://github.com/fortdude17/CraftStats/releases). See [CHANGELOG.md](CHANGELOG.md) for what changed.
+
+Every push to GitHub also builds both versions for both loaders. Open the **Actions** tab, click the latest successful **Build** run, and download the `craftstats-mc1.21.1` or `craftstats-mc1.21.11` artifact (a zip containing the Fabric and NeoForge jars).
 
 To build locally (Java 21):
 
@@ -28,6 +30,8 @@ To build locally (Java 21):
 ```
 
 Jars end up in `fabric/build/libs/` and `neoforge/build/libs/` (use the ones without `-dev` or `-sources`).
+
+To publish a release: set `mod_version` in `gradle.properties`, add a section to `CHANGELOG.md`, and push a tag `v<mod_version>`. The Release workflow builds every version and attaches the jars to a GitHub pre-release.
 
 ## How to use it
 

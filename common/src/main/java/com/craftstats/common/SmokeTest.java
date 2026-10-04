@@ -260,13 +260,15 @@ public final class SmokeTest {
         StatRegistry.setMob(id("pig"), s);
         try {
             var pig = spawn(level, EntityType.PIG);
-            var area = pig.getBoundingBox().inflate(4);
-            java.util.function.Predicate<net.minecraft.world.entity.Entity> isSilverfish = e -> e.getType() == EntityType.SILVERFISH;
-            int before = level.getEntitiesOfClass(net.minecraft.world.entity.Entity.class, area, isSilverfish).size();
+            // Count what was spawned rather than searching the world: since 1.21.9 the spawn
+            // chunks aren't kept loaded, so a test entity there isn't visible to searches.
+            int before = com.craftstats.common.logic.Effects.spawnCount;
             pig.die(pig.damageSources().magic());
-            int after = level.getEntitiesOfClass(net.minecraft.world.entity.Entity.class, area, isSilverfish).size();
-            check(after - before == 3, "spawn on death made " + (after - before) + " silverfish");
-            level.getEntitiesOfClass(net.minecraft.world.entity.Entity.class, area, isSilverfish).forEach(net.minecraft.world.entity.Entity::discard);
+            int made = com.craftstats.common.logic.Effects.spawnCount - before;
+            check(made == 3, "spawn on death made " + made + " silverfish");
+            var area = pig.getBoundingBox().inflate(4);
+            level.getEntitiesOfClass(net.minecraft.world.entity.Entity.class, area, e -> e.getType() == EntityType.SILVERFISH)
+                    .forEach(net.minecraft.world.entity.Entity::discard);
             pig.discard();
         } finally {
             StatRegistry.removeMob(id("pig"));

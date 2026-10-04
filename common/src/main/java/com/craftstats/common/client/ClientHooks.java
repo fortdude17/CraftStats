@@ -48,7 +48,7 @@ public final class ClientHooks {
 
     // ---- sync ------------------------------------------------------------------------------
 
-    private static int lastRenderHash;
+    private static int lastRenderHash = 1; // the hash of "nothing changed"
 
     public static void onSync(byte[] data) {
         // The local host shares its registry with the integrated server already.

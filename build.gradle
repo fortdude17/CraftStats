@@ -82,6 +82,13 @@ subprojects {
         loom.runs.configureEach { vmArg("-Dcraftstats.smokeTest=true") }
         // -Pscreenshots: the client test asks the CI script for screenshots of each screen.
         if (project.hasProperty("screenshots")) loom.runs.configureEach { vmArg("-Dcraftstats.screenshots=true") }
+        // -PinWorld: start the client straight into the world saved as run/saves/smoke.
+        if (project.hasProperty("inWorld")) {
+            loom.runs.matching { it.name == "client" }.configureEach {
+                programArgs("--quickPlaySingleplayer", "smoke")
+                vmArg("-Dcraftstats.inWorld=true")
+            }
+        }
     }
 
     // Version-specific resources: src/main/resources-<mc>/ replaces files of the same path.

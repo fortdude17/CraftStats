@@ -1,6 +1,6 @@
 # CraftStats
 
-An in-game editor for the stats of mobs, blocks, items and players. Pick something, change its numbers, press **Apply**, and it takes effect immediately in the live world. Changes are saved per world.
+An in-game editor for almost everything: mobs, blocks, items, players, projectiles, enchantments and the world itself, with 294 stats in total. Pick something, change its numbers, press **Apply**, and it takes effect immediately in the live world. Changes are saved per world.
 
 ## Supported versions
 
@@ -9,7 +9,7 @@ An in-game editor for the stats of mobs, blocks, items and players. Pick somethi
 | 1.21.1 (also loads on 1.21) | ✅ | ✅ (NeoForge 21.1) |
 | 1.21.11 | ✅ | ✅ (NeoForge 21.11) |
 
-Each Minecraft version has its own jar. Use the one whose name matches your game version (`craftstats-fabric-1.1.2+1.21.11.jar`, ...).
+Each Minecraft version has its own jar. Use the one whose name matches your game version (`craftstats-fabric-1.2.0+1.21.11.jar`, ...).
 
 **Required:** [Architectury API](https://modrinth.com/mod/architectury-api) (13.x for 1.21.1, 19.x for 1.21.11), and on Fabric also [Fabric API](https://modrinth.com/mod/fabric-api).
 **Optional:** [Mod Menu](https://modrinth.com/mod/modmenu) on Fabric for the config button. Cloth Config is no longer needed.
@@ -35,41 +35,44 @@ To publish a release: set `mod_version` in `gradle.properties`, add a section to
 
 ## How to use it
 
-- **Pause menu → CraftStats** opens the full editor: browser on the left, stats on the right.
+- **Pause menu → CraftStats** opens the editor. The tabs at the top pick the type (Mobs, Blocks, Items, Players, Projectiles, Enchants, World), the list on the left picks the target, and the cards on the right are the stat categories. Click a card to edit its stats, or type in **Search stats** to find any stat by name.
+- Hover a stat for an explanation and its allowed range. Number fields left empty use the vanilla value, which is shown in grey. Numbers turn green or orange when they are above or below vanilla, and red when they don't parse. The **x** button next to a stat puts it back to default.
+- Nothing changes in the world until you press **Apply**. **Reset** removes all changes from the selected target, **Reset All** from the whole world.
 - **Craft Wand** (`/craftstats give <player>` or craft it: gold ingots around a nether star, blaze rod below):
   - right-click a block: edit only that block · sneak + right-click: edit that block type
   - right-click a mob: edit that one mob · sneak + right-click: randomize its type
   - right-click a player: edit that player · right-click air: edit yourself
   - right-click air with a spawn egg in your off-hand: edit that mob type
   - left-click a mob: copy its stats to the clipboard as JSON
-- **Player Stats Book**: quick editor for your own stats. Editors get one the first time they join a world.
-
-Number fields left empty use the vanilla value, which is shown in grey. Numbers turn green or orange when they are above or below vanilla, and red when they don't parse.
+- **Player Stats Book**: opens the editor on your own stats. Editors get one the first time they join a world.
 
 ## What you can change
 
-**Mobs** (whole type or a single mob): max health, attack damage, armor, knockback resistance, movement speed, jump strength, follow range, size, XP dropped. Toggles: invincible, immune to fire / fall / drowning / explosions / poison / magic, burns in daylight, can despawn, silent, glowing.
+| Type | Stats | Highlights |
+|---|---|---|
+| Mobs (whole type or a single mob) | 68 | health, damage, armor, speed, size, every other attribute; damage dealt/taken, thorns, lifesteal, fire/potion/lightning on hit; 14 immunities; no AI, hostile, peaceful, teleports when hurt, permanent effect; no drops, extra loot, explode/lightning/spawn mobs on death |
+| Players | 77 | every attribute (health, reach, size, gravity, jump...), flight, no clip, god mode, damage dealt/taken, thorns, lifesteal, on-hit effects, 10 immunities, keep inventory/XP, hunger, 15 permanent effects |
+| Items | 56 | damage, speed, durability, stack size, mining speed, 17 attribute bonuses while held or worn, on-hit effects, **throwable items and boomerangs**, rarity, display name, repair material, cooldown, soulbound, never despawns, food (edible, nutrition, eating time, effects, healing, XP, wolf food) |
+| Blocks | 52 | hardness, blast resistance, slipperiness, jump/speed factor, bounce, landing damage, light, invisible, sound, redstone power, growth speed, mob spawning; launch pads, conveyors, teleport/heal/damage/effects on step; drops, drop multiplier, silk touch only, explode/lightning/spawn when broken, grows back |
+| Projectiles | 19 | damage, speed, gravity, homing, piercing, always critical, lifetime, explode/lightning/fire/spawn/teleport on hit |
+| Enchantments | 7 | max level, level bonus, disabled, table weight, anvil cost, any item, ignore conflicts |
+| World | 15 | day length, clear weather, gravity, fall damage, explosion power, mob health/damage/speed, spawn amount, despawning, peaceful mobs, player damage, hunger, XP, item despawn time |
 
-**Blocks**: hardness (−1 = unbreakable), blast resistance, slipperiness, light level, XP dropped, no collision, climbable, falls like sand, needs the correct tool, piston behaviour. Step-on effects: damage, speed multiplier, levitation, glowing, freezing, any potion effect.
-Per-position edits support hardness, XP, collision, climbing and step-on effects. The rest are type-wide only, because Minecraft doesn't expose a position for them. A per-position edit is ignored once a different block is placed there.
+Blocks can also be edited for a single position (with the wand). Most stats work there; the ones that Minecraft only has per block type (blast resistance, light, sound...) are hidden in that mode. A per-position edit is ignored once a different block is placed there.
 
-**Items**: attack damage, attack speed, enchantability, durability, stack size (1–99), mining speed, fireproof, unbreakable, enchantment glint, and food: make anything edible or inedible, nutrition, saturation, eating time, and an effect on eating. Tools and armor always stack to 1 (Minecraft requires it).
-
-**Players**: health, damage, attack speed, crit multiplier, knockback, sweep damage, invulnerability time, block and entity reach, walk/fly speed, jump, step height, gravity, sneak speed, swimming/mining efficiency, armor and toughness, knockback and explosion resistance, absorption, burn time, fall damage, luck, max food, regeneration threshold, hunger rate, XP multiplier. Toggles: god mode, keep inventory, immune to fire / drowning / poison / magic, no fall damage, no clip (also grants flight), no hunger from actions, one-hit kill, permanent effects (night vision, water breathing, fire resistance, regeneration, glowing, invisibility, haste, strength, speed).
-
-Also: **presets** (built-in and your own, stored in `<game folder>/craftstats/presets/`, shareable as JSON), **copy/paste** of a profile, **From Block** (copy another block's real values), and **randomize** with a seed (mild ±20 %, wild 0.25×–3×, or chaos).
+Also: **presets** (built-in and your own, stored in `<game folder>/craftstats/presets/`, shareable as JSON), **copy/paste** of a profile, **Copy From Block** (copy another block's real values), and **randomize** with a seed (mild ±20 %, wild 0.25×–3×, or chaos) with a preview.
 
 ## Commands
 
-All need operator level 2.
+All need operator level 2. Types: `mob`, `block`, `item`, `player`, `projectile`, `enchantment`, `world`.
 
 ```
 /craftstats give <player>
 /craftstats reload                                   reload config and presets
 /craftstats reset all                                remove every change in this world
-/craftstats reset <mob|block|item|player> <id>
-/craftstats preset load <name> <mob|block|item|player> <id>
-/craftstats randomize <mob|block|item> <id> [seed]
+/craftstats reset <type> <id>                        e.g. reset mob minecraft:zombie, reset world
+/craftstats preset load <name> <type> <id>
+/craftstats randomize <type> <id> [seed]             mob, block, item or projectile
 ```
 
 ## Permissions and config
@@ -80,18 +83,18 @@ All need operator level 2.
 |---|---|---|
 | `requireOp` | `true` | Only operators and the single-player host may edit. |
 | `allowSurvival` | `false` | With `requireOp` off, survival players may edit too (otherwise creative only). |
-| `enableMobEditor`, `enableBlockEditor`, `enableItemEditor`, `enablePlayerEditor`, `enableRandomize`, `enablePresets` | `true` | Turn features off. |
+| `enableMobEditor`, `enableBlockEditor`, `enableItemEditor`, `enablePlayerEditor`, `enableProjectileEditor`, `enableEnchantmentEditor`, `enableWorldEditor`, `enableRandomize`, `enablePresets` | `true` | Turn features off. |
 | `blacklist` | `[]` | IDs that can't be edited, e.g. `["minecraft:wither"]`. |
 | `maxScaleCap` | `16.0` | Largest mob size allowed. |
 | `randomizeIntensity` | `mild` | `mild`, `wild` or `chaos`. |
 
-On a server, the server's config decides who may edit. The server checks every change, and refused changes show a red message in chat.
+On a server, the server's config decides who may edit. The server checks every change and keeps every value inside its allowed range; refused changes show a red message in chat.
 
 ## Data and recovery
 
 Changes are stored in `<world>/craftstats/stats.json`. Worlds made with CraftStats 1.0 are converted automatically when they load. If a world becomes unplayable, use **CraftStats Data** on the title screen to delete the mod's data for one world or all worlds. The world itself is not touched.
 
-Removing an override, or removing the mod, restores vanilla values. Mob and player stats are applied as temporary attribute modifiers and are never written into the save.
+Removing an override, or removing the mod, restores vanilla values. Mob and player stats are applied as temporary attribute modifiers and are never written into the save. Thrown items ride on vanilla snowball entities, so the mod adds no new entities or blocks to your world.
 
 ## Project layout
 

@@ -24,6 +24,9 @@ public final class Effects {
     /** Hard limit so a typo can't level a whole world. */
     public static final float MAX_EXPLOSION = 20f;
 
+    /** Entities spawned by {@link #spawn}, for the smoke test (chunks there may not be loaded). */
+    public static int spawnCount;
+
     private Effects() {}
 
     public static void giveEffect(LivingEntity target, String effectId, Integer level, Integer seconds) {
@@ -60,7 +63,7 @@ public final class Effects {
             if (e == null) return;
             double ox = n > 1 ? (level.random.nextDouble() - 0.5) : 0, oz = n > 1 ? (level.random.nextDouble() - 0.5) : 0;
             e.setPos(pos.x + ox, pos.y, pos.z + oz);
-            level.addFreshEntity(e);
+            if (level.addFreshEntity(e)) spawnCount++;
         }
     }
 

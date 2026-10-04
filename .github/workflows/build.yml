@@ -72,13 +72,18 @@ jobs:
           failed=0
           mkdir -p shots
           for loader in fabric neoforge; do
-            mkdir -p "$loader/run"
+            mkdir -p "$loader/run/saves"
+            # Play in the world the server smoke test created (falls back to the title screen).
+            rm -rf "$loader/run/saves/smoke"
+            inworld=""
+            if [ -d "$loader/run/world" ]; then cp -r "$loader/run/world" "$loader/run/saves/smoke"; inworld="-PinWorld"; fi
+            printf 'pauseOnLostFocus:false\nonboardAccessibility:false\ntutorialStep:none\n' > "$loader/run/options.txt"
             Xvfb :99 -screen 0 854x480x24 > /dev/null 2>&1 &
             xvfb=$!
             export DISPLAY=:99
             shots=""
             [ "$loader" = fabric ] && shots="-Pscreenshots"
-            timeout 600 ./gradlew ":$loader:runClient" -Pmc=${{ matrix.mc }} -PsmokeTest $shots --console=plain > "client-$loader.log" 2>&1 &
+            timeout 600 ./gradlew ":$loader:runClient" -Pmc=${{ matrix.mc }} -PsmokeTest $shots $inworld --console=plain > "client-$loader.log" 2>&1 &
             game=$!
             # The test creates screenshot-<name>.req files and waits until they are gone.
             while kill -0 $game 2>/dev/null; do

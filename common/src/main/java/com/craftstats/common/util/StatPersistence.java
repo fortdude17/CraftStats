@@ -2,26 +2,38 @@ package com.craftstats.common.util;
 
 import com.craftstats.common.CraftStats;
 import com.craftstats.common.stats.*;
-import com.google.gson.*;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
-import java.util.*;
+import java.util.Map;
+import java.util.UUID;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
 
+/** Saves overrides per world in {@code <world>/craftstats/stats.json}. */
 public final class StatPersistence {
 
     private static MinecraftServer server;
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private StatPersistence() {}
 
     public static void init(MinecraftServer srv) {
         server = srv;
-        StatRegistry.init();
+        StatRegistry.clear();
         load();
+    }
+
+    public static void shutdown() {
+        save();
+        server = null;
+        StatRegistry.clear();
     }
 
     public static void save() {
@@ -29,41 +41,60 @@ public final class StatPersistence {
         Path file = getFile();
         if (file == null) return;
         try {
-            JsonObject root = new JsonObject();
-
-            JsonObject mobs = new JsonObject();
-            for (Map.Entry<ResourceLocation, MobStats> e : StatRegistry.allMobs().entrySet())
-                mobs.addProperty(e.getKey().toString(), JsonUtil.toCompactJson(e.getValue()));
-            root.add("mobs", mobs);
-
-            JsonObject blocks = new JsonObject();
-            for (Map.Entry<ResourceLocation, BlockStats> e : StatRegistry.allBlocks().entrySet())
-                blocks.addProperty(e.getKey().toString(), JsonUtil.toCompactJson(e.getValue()));
-            root.add("blocks", blocks);
-
-            JsonObject items = new JsonObject();
-            for (Map.Entry<ResourceLocation, ItemStats> e : StatRegistry.allItems().entrySet())
-                items.addProperty(e.getKey().toString(), JsonUtil.toCompactJson(e.getValue()));
-            root.add("items", items);
-
-            JsonObject players = new JsonObject();
-            for (Map.Entry<UUID, PlayerStats> e : StatRegistry.allPlayers().entrySet())
-                players.addProperty(e.getKey().toString(), JsonUtil.toCompactJson(e.getValue()));
-            root.add("players", players);
-
-            JsonObject mobInstances = new JsonObject();
-            for (Map.Entry<UUID, MobStats> e : StatRegistry.allMobUuids().entrySet())
-                mobInstances.addProperty(e.getKey().toString(), JsonUtil.toCompactJson(e.getValue()));
-            root.add("mob_instances", mobInstances);
-
-            JsonObject blockPos = new JsonObject();
-            for (Map.Entry<String, BlockStats> e : StatRegistry.allBlockPositions().entrySet())
-                blockPos.addProperty(e.getKey(), JsonUtil.toCompactJson(e.getValue()));
-            root.add("block_positions", blockPos);
-
-            Files.writeString(file, GSON.toJson(root));
+            Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
+            Files.writeString(tmp, StatSchema.GSON.toJson(snapshot()), StandardCharsets.UTF_8);
+            try {
+                Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING);
+            }
         } catch (IOException e) {
-            CraftStats.LOGGER.error("CraftStats: save failed: {}", e.getMessage());
+            CraftStats.LOGGER.error("CraftStats: failed to save {}", file, e);
+        }
+    }
+
+    /** The whole registry as JSON. Also used to sync clients. */
+    public static JsonObject snapshot() {
+        JsonObject root = new JsonObject();
+        root.addProperty("v", StatSchema.CURRENT);
+        root.add("mobs",            write(StatRegistry.allMobs()));
+        root.add("blocks",          write(StatRegistry.allBlocks()));
+        root.add("items",           write(StatRegistry.allItems()));
+        root.add("players",         write(StatRegistry.allPlayers()));
+        root.add("mob_instances",   write(StatRegistry.allMobInstances()));
+        root.add("block_positions", write(StatRegistry.allBlockPositions()));
+        return root;
+    }
+
+    /** Replaces the registry contents with a snapshot. Bad entries are skipped and logged. */
+    public static void restore(JsonObject root) {
+        StatRegistry.clear();
+        read(root, "mobs",            TargetType.MOB,    ResourceLocation::parse, StatRegistry::setMob);
+        read(root, "blocks",          TargetType.BLOCK,  ResourceLocation::parse, StatRegistry::setBlock);
+        read(root, "items",           TargetType.ITEM,   ResourceLocation::parse, StatRegistry::setItem);
+        read(root, "players",         TargetType.PLAYER, UUID::fromString,        StatRegistry::setPlayer);
+        read(root, "mob_instances",   TargetType.MOB,    UUID::fromString,        StatRegistry::setMobInstance);
+        read(root, "block_positions", TargetType.BLOCK,  Function.identity(),     StatRegistry::setBlockAt);
+    }
+
+    private static JsonObject write(Map<?, ?> map) {
+        JsonObject obj = new JsonObject();
+        map.forEach((k, v) -> obj.add(k.toString(), StatSchema.GSON_COMPACT.toJsonTree(v)));
+        return obj;
+    }
+
+    private static <K, V> void read(JsonObject root, String section, TargetType type,
+                                    Function<String, K> key, BiConsumer<K, V> sink) {
+        if (!root.has(section) || !root.get(section).isJsonObject()) return;
+        for (Map.Entry<String, JsonElement> e : root.getAsJsonObject(section).entrySet()) {
+            try {
+                JsonElement value = e.getValue();
+                // CraftStats 1.0 stored each entry as a JSON string.
+                if (value.isJsonPrimitive()) value = JsonParser.parseString(value.getAsString());
+                sink.accept(key.apply(e.getKey()), StatSchema.parse(type, value));
+            } catch (Exception ex) {
+                CraftStats.LOGGER.warn("CraftStats: skipping invalid {} entry '{}': {}", section, e.getKey(), ex.toString());
+            }
         }
     }
 
@@ -71,38 +102,16 @@ public final class StatPersistence {
         Path file = getFile();
         if (file == null || !Files.exists(file)) return;
         try {
-            String text = Files.readString(file);
-            JsonObject root = JsonParser.parseString(text).getAsJsonObject();
-            if (root.has("mobs"))
-                for (var e : root.getAsJsonObject("mobs").entrySet())
-                    StatRegistry.setMob(ResourceLocation.parse(e.getKey()),
-                            JsonUtil.mobStatsFromJson(e.getValue().getAsString()));
-            if (root.has("blocks"))
-                for (var e : root.getAsJsonObject("blocks").entrySet())
-                    StatRegistry.setBlock(ResourceLocation.parse(e.getKey()),
-                            JsonUtil.blockStatsFromJson(e.getValue().getAsString()));
-            if (root.has("items"))
-                for (var e : root.getAsJsonObject("items").entrySet())
-                    StatRegistry.setItem(ResourceLocation.parse(e.getKey()),
-                            JsonUtil.itemStatsFromJson(e.getValue().getAsString()));
-            if (root.has("players"))
-                for (var e : root.getAsJsonObject("players").entrySet())
-                    StatRegistry.setPlayer(UUID.fromString(e.getKey()),
-                            JsonUtil.playerStatsFromJson(e.getValue().getAsString()));
-            if (root.has("mob_instances"))
-                for (var e : root.getAsJsonObject("mob_instances").entrySet())
-                    StatRegistry.setMobUuid(UUID.fromString(e.getKey()),
-                            JsonUtil.mobStatsFromJson(e.getValue().getAsString()));
-            if (root.has("block_positions"))
-                for (var e : root.getAsJsonObject("block_positions").entrySet())
-                    StatRegistry.setBlockAt(e.getKey(),
-                            JsonUtil.blockStatsFromJson(e.getValue().getAsString()));
-            CraftStats.LOGGER.info("CraftStats: loaded {} mob, {} block, {} item, {} player, {} block-pos override(s).",
+            restore(JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8)).getAsJsonObject());
+            CraftStats.LOGGER.info("CraftStats: loaded {} mob, {} block, {} item, {} player, {} mob-instance and {} block-position override(s).",
                     StatRegistry.allMobs().size(), StatRegistry.allBlocks().size(),
                     StatRegistry.allItems().size(), StatRegistry.allPlayers().size(),
-                    StatRegistry.allBlockPositions().size());
+                    StatRegistry.allMobInstances().size(), StatRegistry.allBlockPositions().size());
         } catch (Exception e) {
-            CraftStats.LOGGER.error("CraftStats: load failed from {}: {}", file, e.getMessage());
+            // Keep the unreadable file so the user doesn't lose it on the next save.
+            Path backup = file.resolveSibling("stats.json.broken-" + System.currentTimeMillis());
+            try { Files.copy(file, backup); } catch (IOException ignored) {}
+            CraftStats.LOGGER.error("CraftStats: could not read {} (backed up to {})", file, backup.getFileName(), e);
         }
     }
 
@@ -113,7 +122,7 @@ public final class StatPersistence {
             Files.createDirectories(dir);
             return dir.resolve("stats.json");
         } catch (IOException e) {
-            CraftStats.LOGGER.error("CraftStats: could not create save directory: {}", e.getMessage());
+            CraftStats.LOGGER.error("CraftStats: could not create save directory", e);
             return null;
         }
     }

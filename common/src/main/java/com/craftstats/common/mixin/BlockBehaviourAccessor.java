@@ -8,4 +8,11 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 public interface BlockBehaviourAccessor {
     @Accessor("properties")
     BlockBehaviour.Properties craftstats$getBlockProperties();
+
+    // Read the fields directly: the getters are overridden by CraftStats itself.
+    @Accessor("friction")
+    float craftstats$getFriction();
+
+    @Accessor("explosionResistance")
+    float craftstats$getExplosionResistance();
 }

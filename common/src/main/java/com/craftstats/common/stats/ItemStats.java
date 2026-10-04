@@ -2,48 +2,38 @@ package com.craftstats.common.stats;
 
 import com.google.gson.annotations.SerializedName;
 
+/**
+ * Overrides for an item type, applied as data components. A {@code null} number means
+ * "leave the vanilla value alone".
+ */
 public class ItemStats {
 
-    @SerializedName("attack_damage")     public double  attackDamage     = 1.0;
-    @SerializedName("attack_speed")      public double  attackSpeed      = 4.0;
-    @SerializedName("enchantability")    public int     enchantability   = 0;
-    @SerializedName("sweep_multiplier")  public double  sweepMultiplier  = 0.0;
+    public static final String EDIBLE_VANILLA = "vanilla", EDIBLE_YES = "yes", EDIBLE_NO = "no";
 
-    @SerializedName("max_durability")    public int     maxDurability    = 0;
-    @SerializedName("stack_size")        public int     stackSize        = 64;
-    @SerializedName("mining_speed")      public float   miningSpeed      = 1.0f;
-    @SerializedName("repair_material")   public String  repairMaterial   = "";
-    @SerializedName("fireproof")         public boolean fireproof        = false;
-    @SerializedName("unbreakable")       public boolean unbreakable      = false;
-    @SerializedName("consumed_on_use")   public boolean consumedOnUse    = false;
-    @SerializedName("item_glow")         public boolean itemGlow         = false;
+    @SerializedName("v") public int schema = StatSchema.CURRENT;
 
-    @SerializedName("nutrition")         public int     nutrition        = 0;
-    @SerializedName("saturation")        public float   saturation       = 0.0f;
-    @SerializedName("eat_duration")      public int     eatDuration      = 32;
-    @SerializedName("on_eat_effect")     public String  onEatEffect      = "";
-    @SerializedName("is_food")           public boolean isFood           = false;
-    @SerializedName("always_edible")     public boolean alwaysEdible     = false;
-    @SerializedName("fast_eat")          public boolean fastEat          = false;
-    @SerializedName("is_meat")           public boolean isMeat           = false;
+    @SerializedName("attack_damage")   public Double  attackDamage;
+    @SerializedName("attack_speed")    public Double  attackSpeed;
+    @SerializedName("enchantability")  public Integer enchantability;
 
-    @SerializedName("is_weapon")         public boolean isWeapon         = false;
-    @SerializedName("is_tool")           public boolean isTool           = false;
-    @SerializedName("is_armor")          public boolean isArmor          = false;
-    @SerializedName("throwable")         public boolean throwable        = false;
-    @SerializedName("boomerang")         public boolean boomerang        = false;
-    @SerializedName("projectile")        public boolean projectile       = false;
+    @SerializedName("max_durability")  public Integer maxDurability;
+    @SerializedName("stack_size")      public Integer stackSize;
+    @SerializedName("mining_speed")    public Float   miningSpeed;
+    @SerializedName("fireproof")       public boolean fireproof;
+    @SerializedName("unbreakable")     public boolean unbreakable;
+    @SerializedName("item_glow")       public boolean itemGlow;
 
-    public ItemStats copy() {
-        ItemStats c = new ItemStats();
-        c.attackDamage = attackDamage; c.attackSpeed = attackSpeed; c.enchantability = enchantability;
-        c.sweepMultiplier = sweepMultiplier; c.maxDurability = maxDurability; c.stackSize = stackSize;
-        c.miningSpeed = miningSpeed; c.repairMaterial = repairMaterial; c.fireproof = fireproof;
-        c.unbreakable = unbreakable; c.consumedOnUse = consumedOnUse; c.itemGlow = itemGlow;
-        c.nutrition = nutrition; c.saturation = saturation; c.eatDuration = eatDuration;
-        c.onEatEffect = onEatEffect; c.isFood = isFood; c.alwaysEdible = alwaysEdible;
-        c.fastEat = fastEat; c.isMeat = isMeat; c.isWeapon = isWeapon; c.isTool = isTool;
-        c.isArmor = isArmor; c.throwable = throwable; c.boomerang = boomerang; c.projectile = projectile;
-        return c;
+    @SerializedName("edible")          public String  edible = EDIBLE_VANILLA;
+    @SerializedName("nutrition")       public Integer nutrition;
+    @SerializedName("saturation")      public Float   saturation;
+    @SerializedName("eat_seconds")     public Float   eatSeconds;
+    @SerializedName("always_edible")   public boolean alwaysEdible;
+    @SerializedName("on_eat_effect")   public String  onEatEffect = "";
+
+    public boolean changesFood() {
+        return !EDIBLE_VANILLA.equals(edible) || nutrition != null || saturation != null
+                || eatSeconds != null || alwaysEdible || !onEatEffect.isEmpty();
     }
+
+    public ItemStats copy() { return StatSchema.copy(this, ItemStats.class); }
 }

@@ -1,337 +1,255 @@
 package com.craftstats.common.gui.panel;
 
+import com.craftstats.common.gui.UiInput;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.network.chat.Component;
 
 import java.lang.reflect.Field;
+import java.util.Locale;
 
+/**
+ * One editable row bound to a field of a stats object via reflection. Optional numbers
+ * (boxed types) can be left empty, which means "vanilla"; the vanilla value is shown as a
+ * grey hint.
+ */
 public class FieldRow {
 
-    public final int x, y, w;
-    static final int H       = 18;
-    private static final int LABEL_W = 140;
+    public static final int H = 18;
+    private static final int LABEL_W = 150;
     private static final int BTN_W   = 12;
+    private static final int TOGGLE_W = 36;
 
-    private final FieldDef  def;
-    private final Object    target;
-    private final Runnable  onChange;
-    private final Field     field;
+    public final int x, y, w;
 
-    private EditBox numberBox;
-    private EditBox textBox;
-    private int     pillIndex    = 0;
+    private final FieldDef def;
+    private final Object   target;
+    private final Object   vanilla;
+    private final Runnable onChange;
+    private final Field    field;
 
-    private FieldRow(FieldDef def, Object target, int x, int y, int w, Runnable onChange) {
-        this.def      = def;
-        this.target   = target;
-        this.x        = x;
-        this.y        = y;
-        this.w        = w;
+    private EditBox box;
+    private boolean invalid;
+
+    private FieldRow(FieldDef def, Object target, Object vanilla, int x, int y, int w, Runnable onChange) {
+        this.def = def;
+        this.target = target;
+        this.vanilla = vanilla;
+        this.x = x; this.y = y; this.w = w;
         this.onChange = onChange;
-
-        Field f = null;
-        try {
-            f = resolveField(target.getClass(), def.fieldName());
-            if (f != null) f.setAccessible(true);
-        } catch (Exception ignored) {}
-        this.field = f;
-
+        this.field = resolve(target.getClass(), def.fieldName());
         initWidget();
     }
 
-    private static Field resolveField(Class<?> clazz, String name) {
-        try { return clazz.getField(name); } catch (NoSuchFieldException e1) {
-            try { return clazz.getDeclaredField(name); } catch (NoSuchFieldException e2) {
-                String camel = snakeToCamel(name);
-                try { return clazz.getField(camel); } catch (NoSuchFieldException e3) {
-                    try { return clazz.getDeclaredField(camel); } catch (NoSuchFieldException e4) {
-                        return null;
-                    }
-                }
-            }
+    public static FieldRow create(FieldDef def, Object target, Object vanilla, int x, int y, int w, Runnable onChange) {
+        return new FieldRow(def, target, vanilla, x, y, w, onChange);
+    }
+
+    private static Field resolve(Class<?> type, String name) {
+        try {
+            Field f = type.getField(name);
+            f.setAccessible(true);
+            return f;
+        } catch (NoSuchFieldException e) {
+            throw new IllegalArgumentException("No field '" + name + "' on " + type.getSimpleName(), e);
         }
     }
 
-    private static String snakeToCamel(String s) {
-        StringBuilder sb = new StringBuilder();
-        boolean up = false;
-        for (char c : s.toCharArray()) {
-            if (c == '_')     { up = true; }
-            else if (up)      { sb.append(Character.toUpperCase(c)); up = false; }
-            else              { sb.append(c); }
-        }
-        return sb.toString();
-    }
+    private int inputX() { return x + LABEL_W; }
+    private int inputW() { return def.type() == FieldDef.FieldType.NUMBER ? w - LABEL_W - BTN_W * 2 - 6 : w - LABEL_W - 2; }
 
     private void initWidget() {
-        int inputX = x + LABEL_W;
-        int inputW = w - LABEL_W - BTN_W * 2 - 6;
-        switch (def.type()) {
-            case NUMBER -> {
-                numberBox = new EditBox(Minecraft.getInstance().font,
-                        inputX, y, inputW, H, Component.empty());
-                numberBox.setMaxLength(30);
-                numberBox.setValue(getFieldStringValue());
-                numberBox.setResponder(v -> writeField(v));
-            }
-            case TEXT -> {
-                textBox = new EditBox(Minecraft.getInstance().font,
-                        inputX, y, w - LABEL_W - 2, H, Component.empty());
-                textBox.setMaxLength(256);
-                textBox.setValue(getFieldStringValue());
-                textBox.setResponder(v -> writeStringField(v));
-            }
-            case PILL -> {
-                String cur = getFieldStringValue();
-                pillIndex = 0;
-                if (def.options() != null) {
-                    for (int i = 0; i < def.options().length; i++) {
-                        if (def.options()[i].equals(cur)) { pillIndex = i; break; }
-                    }
-                }
-            }
-            case TOGGLE -> {}
-        }
+        if (def.type() != FieldDef.FieldType.NUMBER && def.type() != FieldDef.FieldType.TEXT) return;
+        box = new EditBox(Minecraft.getInstance().font, inputX(), y, inputW(), H, Component.literal(def.label()));
+        box.setMaxLength(def.type() == FieldDef.FieldType.TEXT ? 256 : 32);
+        Object current = get(target);
+        box.setValue(current == null ? "" : format(current));
+        String hint = vanilla != null ? format(get(vanilla)) : "";
+        if (!hint.isEmpty()) box.setHint(Component.literal("default: " + hint).withStyle(s -> s.withColor(0x707080)));
+        box.setResponder(this::onTyped);
     }
 
-    public static FieldRow create(FieldDef def, Object target, int x, int y, int w, Runnable onChange) {
-        return new FieldRow(def, target, x, y, w, onChange);
+    // ---- reflection helpers -------------------------------------------------------------
+
+    private Object get(Object obj) {
+        if (obj == null) return null;
+        try { return field.get(obj); } catch (IllegalAccessException e) { return null; }
     }
+
+    private void set(Object value) {
+        try { field.set(target, value); } catch (IllegalAccessException | IllegalArgumentException ignored) {}
+    }
+
+    private boolean isOptionalNumber() {
+        return !field.getType().isPrimitive();
+    }
+
+    /** Parses text into the field's numeric type; returns null if it doesn't parse. */
+    private Object parse(String text) {
+        try {
+            Class<?> t = field.getType();
+            String s = text.trim();
+            if (t == double.class || t == Double.class)  return Double.parseDouble(s);
+            if (t == float.class  || t == Float.class)   return Float.parseFloat(s);
+            if (t == int.class    || t == Integer.class) return (int) Math.round(Double.parseDouble(s));
+            if (t == long.class   || t == Long.class)    return Long.parseLong(s);
+        } catch (NumberFormatException ignored) {}
+        return null;
+    }
+
+    private static String format(Object v) {
+        if (v == null) return "";
+        if (v instanceof Double || v instanceof Float) {
+            double d = ((Number) v).doubleValue();
+            if (d == Math.rint(d) && Math.abs(d) < 1e9) return String.valueOf((long) d);
+            return String.format(Locale.ROOT, "%.4f", d).replaceAll("0+$", "").replaceAll("\\.$", "");
+        }
+        return String.valueOf(v);
+    }
+
+    private void onTyped(String text) {
+        if (def.type() == FieldDef.FieldType.TEXT) {
+            set(text);
+            onChange.run();
+            return;
+        }
+        if (text.isBlank()) {
+            invalid = false;
+            if (isOptionalNumber()) { set(null); onChange.run(); }
+            return;
+        }
+        Object value = parse(text);
+        invalid = value == null || (value instanceof Double d && (d.isNaN() || d.isInfinite()))
+                || (value instanceof Float f && (f.isNaN() || f.isInfinite()));
+        if (!invalid) { set(value); onChange.run(); }
+    }
+
+    private void step(int dir) {
+        Object current = get(target);
+        if (current == null) current = get(vanilla);
+        double v = current instanceof Number n ? n.doubleValue() : 0;
+        double abs = Math.abs(v);
+        boolean integer = field.getType() == int.class || field.getType() == Integer.class;
+        double size = integer ? 1 : abs < 0.1 ? 0.01 : abs < 1 ? 0.05 : abs < 10 ? 0.5 : abs < 100 ? 1 : 10;
+        Object next = parse(format(v + dir * size));
+        if (next == null) return;
+        set(next);
+        if (box != null) box.setValue(format(next));
+        onChange.run();
+    }
+
+    private int valueColor() {
+        if (invalid) return 0xFFFF5555;
+        Object cur = get(target), van = get(vanilla);
+        if (!(cur instanceof Number c) || !(van instanceof Number v)) return 0xFFFFFFFF;
+        int cmp = Double.compare(c.doubleValue(), v.doubleValue());
+        return cmp > 0 ? 0xFF88EE88 : cmp < 0 ? 0xFFEEAA44 : 0xFFFFFFFF;
+    }
+
+    // ---- rendering & input ---------------------------------------------------------------
 
     public void render(GuiGraphics g, int mx, int my, float delta, int scrollOffset) {
         int ry = y - scrollOffset;
         Minecraft mc = Minecraft.getInstance();
-
         g.drawString(mc.font, def.label(), x + 3, ry + (H - 8) / 2 + 1, 0xFFCCCCCC, false);
-
-        int inputX = x + LABEL_W;
-        int inputW = w - LABEL_W - BTN_W * 2 - 6;
+        int ix = inputX(), iw = inputW();
 
         switch (def.type()) {
-            case NUMBER -> {
-                if (numberBox != null) {
-                    numberBox.setX(inputX);
-                    numberBox.setY(ry);
-                    numberBox.setHeight(H);
-                    numberBox.setTextColor(valueColor());
-                    boolean focused = numberBox.isFocused();
-
-                    numberBox.setBordered(focused);
-                    if (!focused) g.fill(inputX, ry, inputX + inputW, ry + H, 0xFF1A1A33);
-                    numberBox.render(g, mx, my, delta);
-
-                    int bx1 = inputX + inputW + 2;
-                    int bx2 = bx1 + BTN_W + 1;
+            case NUMBER, TEXT -> {
+                box.setX(ix);
+                box.setY(ry);
+                box.setTextColor(def.type() == FieldDef.FieldType.NUMBER ? valueColor() : 0xFFFFFFFF);
+                boolean focused = box.isFocused();
+                box.setBordered(focused);
+                if (!focused) g.fill(ix, ry, ix + iw, ry + H, 0xFF1A1A33);
+                box.render(g, mx, my, delta);
+                if (def.type() == FieldDef.FieldType.NUMBER) {
+                    int bx1 = ix + iw + 2, bx2 = bx1 + BTN_W + 1;
                     boolean hoverMinus = mx >= bx1 && mx < bx1 + BTN_W && my >= ry && my < ry + H;
                     boolean hoverPlus  = mx >= bx2 && mx < bx2 + BTN_W && my >= ry && my < ry + H;
                     g.fill(bx1, ry, bx1 + BTN_W, ry + H, hoverMinus ? 0xFF6677BB : 0xFF333355);
                     g.fill(bx2, ry, bx2 + BTN_W, ry + H, hoverPlus  ? 0xFF6677BB : 0xFF333355);
-                    g.drawCenteredString(mc.font, "−", bx1 + BTN_W / 2, ry + (H - 8) / 2, 0xFFDDDDDD);
+                    g.drawCenteredString(mc.font, "-", bx1 + BTN_W / 2, ry + (H - 8) / 2, 0xFFDDDDDD);
                     g.drawCenteredString(mc.font, "+", bx2 + BTN_W / 2, ry + (H - 8) / 2, 0xFFDDDDDD);
                 }
             }
-            case TEXT -> {
-                if (textBox != null) {
-                    textBox.setX(inputX);
-                    textBox.setY(ry);
-                    textBox.setHeight(H);
-                    boolean focused = textBox.isFocused();
-                    textBox.setBordered(focused);
-                    if (!focused) g.fill(inputX, ry, inputX + (w - LABEL_W - 2), ry + H, 0xFF1A1A33);
-                    textBox.render(g, mx, my, delta);
-                }
-            }
             case TOGGLE -> {
-                boolean val = getBooleanValue();
-                int tw = 36;
-                g.fill(inputX, ry + 1, inputX + tw, ry + H - 1, val ? 0xFF2A7A2A : 0xFF5A2A2A);
-                int thumbX = val ? inputX + tw - 15 : inputX + 3;
-                g.fill(thumbX, ry + 3, thumbX + 12, ry + H - 3, val ? 0xFF55EE55 : 0xFFEE5555);
-                g.drawCenteredString(mc.font, val ? "ON" : "OFF",
-                        val ? inputX + tw - 8 - mc.font.width("ON")  / 2
-                             : inputX + 14 + mc.font.width("OFF") / 2,
-                        ry + (H - 8) / 2, 0xFFFFFFFF);
+                boolean on = Boolean.TRUE.equals(get(target));
+                g.fill(ix, ry + 1, ix + TOGGLE_W, ry + H - 1, on ? 0xFF2A7A2A : 0xFF5A2A2A);
+                int thumbX = on ? ix + TOGGLE_W - 15 : ix + 3;
+                g.fill(thumbX, ry + 3, thumbX + 12, ry + H - 3, on ? 0xFF55EE55 : 0xFFEE5555);
+                String label = on ? "ON" : "OFF";
+                int textX = on ? ix + 4 : ix + TOGGLE_W - 4 - mc.font.width(label);
+                g.drawString(mc.font, label, textX, ry + (H - 8) / 2 + 1, 0xFFFFFFFF, false);
             }
             case PILL -> {
-                if (def.options() != null) {
-                    int pillW = (w - LABEL_W - 4) / def.options().length;
-                    for (int i = 0; i < def.options().length; i++) {
-                        int px   = inputX + i * pillW;
-                        boolean sel = i == pillIndex;
-                        g.fill(px, ry + 1, px + pillW - 1, ry + H - 1, sel ? 0xFF533483 : 0xFF2D2D4E);
-                        if (sel) g.fill(px, ry + H - 3, px + pillW - 1, ry + H - 1, 0xFF9966FF);
-                        String lbl = def.options()[i];
-                        if (lbl.length() > 7) lbl = lbl.substring(0, 6) + "…";
-                        g.drawCenteredString(mc.font, lbl, px + pillW / 2,
-                                ry + (H - 8) / 2, sel ? 0xFFFFFFFF : 0xFFAAAAAA);
-                    }
+                String[] options = def.options();
+                String current = String.valueOf(get(target));
+                int pillW = (w - LABEL_W - 4) / options.length;
+                for (int i = 0; i < options.length; i++) {
+                    int px = ix + i * pillW;
+                    boolean sel = options[i].equals(current);
+                    g.fill(px, ry + 1, px + pillW - 1, ry + H - 1, sel ? 0xFF533483 : 0xFF2D2D4E);
+                    if (sel) g.fill(px, ry + H - 3, px + pillW - 1, ry + H - 1, 0xFF9966FF);
+                    String label = mc.font.plainSubstrByWidth(options[i].replace('_', ' '), pillW - 4);
+                    g.drawCenteredString(mc.font, label, px + pillW / 2, ry + (H - 8) / 2, sel ? 0xFFFFFFFF : 0xFFAAAAAA);
                 }
             }
         }
     }
 
-    public boolean mouseClicked(double mx, double my, int btn) {
-        int inputX = x + LABEL_W;
-        int inputW = w - LABEL_W - BTN_W * 2 - 6;
-
+    /** {@code my} must already include the scroll offset. */
+    public boolean mouseClicked(double mx, double my, int button) {
+        if (my < y || my >= y + H || mx < x || mx >= x + w) return false;
+        int ix = inputX(), iw = inputW();
         switch (def.type()) {
             case NUMBER -> {
-                if (numberBox != null) {
-                    int bx1 = inputX + inputW + 2;
-                    int bx2 = bx1 + BTN_W + 1;
-                    if (mx >= bx1 && mx < bx1 + BTN_W && my >= y && my < y + H) { step(-1); return true; }
-                    if (mx >= bx2 && mx < bx2 + BTN_W && my >= y && my < y + H) { step(1);  return true; }
-                    if (my >= y && my < y + H && mx >= x && mx < x + w) {
-                        numberBox.setFocused(true);
-                        numberBox.setCursorPosition(numberBox.getValue().length());
-                        numberBox.setHighlightPos(0);
-                        return true;
-                    }
-                }
+                int bx1 = ix + iw + 2, bx2 = bx1 + BTN_W + 1;
+                if (mx >= bx1 && mx < bx1 + BTN_W) { step(-1); return true; }
+                if (mx >= bx2 && mx < bx2 + BTN_W) { step(1);  return true; }
+                focusBox();
+                return true;
             }
-            case TEXT -> {
-                if (textBox != null) {
-
-                    if (my >= y && my < y + H && mx >= x && mx < x + w) {
-                        textBox.setFocused(true);
-                        textBox.setCursorPosition(textBox.getValue().length());
-                        textBox.setHighlightPos(0);
-                        return true;
-                    }
-                }
-            }
+            case TEXT -> { focusBox(); return true; }
             case TOGGLE -> {
-                if (mx >= x && mx < x + LABEL_W + 36 && my >= y && my < y + H) {
-                    writeBooleanField(!getBooleanValue());
-                    onChange.run();
-                    return true;
-                }
+                if (mx >= ix + TOGGLE_W && mx >= x + LABEL_W) return false;
+                set(!Boolean.TRUE.equals(get(target)));
+                onChange.run();
+                return true;
             }
             case PILL -> {
-                if (def.options() != null) {
-                    int pillW = (w - LABEL_W - 4) / def.options().length;
-                    int idx   = (int) ((mx - inputX) / pillW);
-                    if (my >= y && my < y + H && idx >= 0 && idx < def.options().length) {
-                        pillIndex = idx;
-                        writeStringField(def.options()[idx]);
-                        onChange.run();
-                        return true;
-                    }
-                }
+                String[] options = def.options();
+                int pillW = (w - LABEL_W - 4) / options.length;
+                int idx = (int) ((mx - ix) / pillW);
+                if (mx < ix || idx < 0 || idx >= options.length) return false;
+                set(options[idx]);
+                onChange.run();
+                return true;
             }
         }
         return false;
     }
 
-    private int valueColor() {
-        if (field == null) return 0xFFFFFFFF;
-        try {
-            Object defInst = target.getClass().getDeclaredConstructor().newInstance();
-            Field df = resolveField(defInst.getClass(), def.fieldName());
-            if (df == null) return 0xFFFFFFFF;
-            df.setAccessible(true);
-            double cur = toDouble(field.get(target));
-            double def = toDouble(df.get(defInst));
-            if (cur > def) return 0xFF88EE88;
-            if (cur < def) return 0xFFEEAA44;
-        } catch (Exception ignored) {}
-        return 0xFFFFFFFF;
-    }
-
-    private static double toDouble(Object v) {
-        if (v instanceof Number n) return n.doubleValue();
-        return 0;
-    }
-
-    private void step(int dir) {
-        if (field == null) return;
-        try {
-            if (field.getType() == double.class || field.getType() == Double.class) {
-                double v = field.getDouble(target);
-                double next = v + dir * stepSize(v);
-                field.setDouble(target, next);
-                if (numberBox != null) numberBox.setValue(fmt(field.getDouble(target)));
-            } else if (field.getType() == float.class || field.getType() == Float.class) {
-                float v = field.getFloat(target);
-                float next = v + dir * (float) stepSize(v);
-                field.setFloat(target, next);
-                if (numberBox != null) numberBox.setValue(fmt(field.getFloat(target)));
-            } else if (field.getType() == int.class || field.getType() == Integer.class) {
-                int v = field.getInt(target);
-                field.setInt(target, v + dir);
-                if (numberBox != null) numberBox.setValue(String.valueOf(v + dir));
-            }
-            onChange.run();
-        } catch (Exception ignored) {}
-    }
-
-    private double stepSize(double v) {
-        double abs = Math.abs(v);
-        if (abs < 0.1)   return 0.001;
-        if (abs < 1)     return 0.01;
-        if (abs < 10)    return 0.1;
-        if (abs < 100)   return 1.0;
-        return 10.0;
-    }
-
-    private String fmt(double v) {
-        if (v == Math.floor(v) && Math.abs(v) < 1e9) return String.valueOf((long) v);
-        String s = String.format("%.4f", v);
-        return s.replaceAll("0+$", "").replaceAll("\\.$", "");
-    }
-
-    private String getFieldStringValue() {
-        if (field == null) return "";
-        try { return String.valueOf(field.get(target)); }
-        catch (Exception e) { return ""; }
-    }
-
-    private boolean getBooleanValue() {
-        if (field == null) return false;
-        try { return field.getBoolean(target); }
-        catch (Exception e) { return false; }
-    }
-
-    private void writeField(String text) {
-        if (field == null) return;
-        try {
-            Class<?> t = field.getType();
-            if      (t == double.class  || t == Double.class)  field.setDouble(target, Double.parseDouble(text));
-            else if (t == float.class   || t == Float.class)   field.setFloat(target, Float.parseFloat(text));
-            else if (t == int.class     || t == Integer.class) field.setInt(target, Integer.parseInt(text));
-            else if (t == long.class    || t == Long.class)    field.setLong(target, Long.parseLong(text));
-            onChange.run();
-        } catch (Exception ignored) {}
-    }
-
-    private void writeStringField(String text) {
-        if (field == null) return;
-        try { field.set(target, text); onChange.run(); }
-        catch (Exception ignored) {}
-    }
-
-    private void writeBooleanField(boolean v) {
-        if (field == null) return;
-        try { field.setBoolean(target, v); }
-        catch (Exception ignored) {}
+    private void focusBox() {
+        box.setFocused(true);
+        box.setCursorPosition(box.getValue().length());
+        box.setHighlightPos(0);
     }
 
     public void clearFocus() {
-        if (numberBox != null) numberBox.setFocused(false);
-        if (textBox   != null) textBox.setFocused(false);
+        if (box != null) box.setFocused(false);
+    }
+
+    public boolean isFocused() {
+        return box != null && box.isFocused();
     }
 
     public boolean keyPressed(int key, int scan, int mods) {
-        if (numberBox != null && numberBox.isFocused()) return numberBox.keyPressed(key, scan, mods);
-        if (textBox   != null && textBox.isFocused())   return textBox.keyPressed(key, scan, mods);
-        return false;
+        return isFocused() && UiInput.key(box, key, scan, mods);
     }
 
     public boolean charTyped(char c, int mods) {
-        if (numberBox != null && numberBox.isFocused()) return numberBox.charTyped(c, mods);
-        if (textBox   != null && textBox.isFocused())   return textBox.charTyped(c, mods);
-        return false;
+        return isFocused() && UiInput.chr(box, c, mods);
     }
 }

@@ -1,65 +1,152 @@
 package com.craftstats.common.stats;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 
+import com.craftstats.common.util.Compat;
+
+import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * All active overrides. On a dedicated server the client holds a synced copy; in single
+ * player the integrated server and the client share this one instance.
+ */
 public final class StatRegistry {
 
-    private static final Map<ResourceLocation, MobStats>    MOB_OVERRIDES       = new ConcurrentHashMap<>();
-    private static final Map<ResourceLocation, BlockStats>   BLOCK_OVERRIDES     = new ConcurrentHashMap<>();
-    private static final Map<ResourceLocation, ItemStats>    ITEM_OVERRIDES      = new ConcurrentHashMap<>();
-    private static final Map<UUID,             PlayerStats>  PLAYER_OVERRIDES    = new ConcurrentHashMap<>();
+    private static final Map<ResourceLocation, MobStats>   MOBS            = new ConcurrentHashMap<>();
+    private static final Map<ResourceLocation, BlockStats> BLOCKS          = new ConcurrentHashMap<>();
+    private static final Map<ResourceLocation, ItemStats>  ITEMS           = new ConcurrentHashMap<>();
+    private static final Map<UUID, PlayerStats>            PLAYERS         = new ConcurrentHashMap<>();
+    private static final Map<UUID, MobStats>               MOB_INSTANCES   = new ConcurrentHashMap<>();
+    private static final Map<String, BlockStats>           BLOCK_POSITIONS = new ConcurrentHashMap<>();
 
-    private static final Map<UUID,             MobStats>     MOB_UUID_OVERRIDES  = new ConcurrentHashMap<>();
+    /** Incremented on every change; used to invalidate caches derived from the overrides. */
+    private static volatile int revision;
 
-    private static final Map<String,           BlockStats>   BLOCK_POS_OVERRIDES = new ConcurrentHashMap<>();
+    /**
+     * Identity-keyed views of the type maps, rebuilt after changes. Block lookups happen in hot
+     * paths (lighting, collision), so they must not hash ids every call.
+     */
+    private record Caches(int revision, Map<Block, BlockStats> blocks, Map<EntityType<?>, MobStats> mobs,
+                          Map<Item, ItemStats> items) {}
+    private static volatile Caches caches = new Caches(-1, Map.of(), Map.of(), Map.of());
 
-    public static void init() {
-        MOB_OVERRIDES.clear();
-        BLOCK_OVERRIDES.clear();
-        ITEM_OVERRIDES.clear();
-        PLAYER_OVERRIDES.clear();
-        MOB_UUID_OVERRIDES.clear();
-        BLOCK_POS_OVERRIDES.clear();
+    private static Caches caches() {
+        Caches c = caches;
+        int rev = revision;
+        if (c.revision() == rev) return c;
+        Map<Block, BlockStats> blocks = new IdentityHashMap<>();
+        // Defaulted registries return air/pig for unknown ids, hence the containsKey checks.
+        BLOCKS.forEach((id, s) -> { if (BuiltInRegistries.BLOCK.containsKey(id)) blocks.put(Compat.registryValue(BuiltInRegistries.BLOCK, id), s); });
+        Map<EntityType<?>, MobStats> mobs = new IdentityHashMap<>();
+        MOBS.forEach((id, s) -> { if (BuiltInRegistries.ENTITY_TYPE.containsKey(id)) mobs.put(Compat.registryValue(BuiltInRegistries.ENTITY_TYPE, id), s); });
+        Map<Item, ItemStats> items = new IdentityHashMap<>();
+        ITEMS.forEach((id, s) -> { if (BuiltInRegistries.ITEM.containsKey(id)) items.put(Compat.registryValue(BuiltInRegistries.ITEM, id), s); });
+        c = new Caches(rev, blocks, mobs, items);
+        caches = c;
+        return c;
     }
+
+    private StatRegistry() {}
+
+    public static void clear() {
+        MOBS.clear(); BLOCKS.clear(); ITEMS.clear(); PLAYERS.clear();
+        MOB_INSTANCES.clear(); BLOCK_POSITIONS.clear();
+        changed();
+    }
+
+    public static int revision() { return revision; }
+    public static void changed() { revision++; }
 
     public static String makePosKey(ResourceKey<Level> dim, BlockPos pos) {
-        return dim.location() + "|" + pos.getX() + "|" + pos.getY() + "|" + pos.getZ();
+        //#if MC >= 1.21.11
+        //$ String dimId = dim.identifier().toString();
+        //#else
+        String dimId = dim.location().toString();
+        //#endif
+        return dimId + "|" + pos.getX() + "|" + pos.getY() + "|" + pos.getZ();
     }
 
-    public static void setMob(ResourceLocation type, MobStats stats)  { MOB_OVERRIDES.put(type, stats); }
-    public static MobStats getMob(ResourceLocation type)               { return MOB_OVERRIDES.get(type); }
-    public static void removeMob(ResourceLocation type)                { MOB_OVERRIDES.remove(type); }
-    public static Map<ResourceLocation, MobStats> allMobs()            { return MOB_OVERRIDES; }
+    // ---- mobs --------------------------------------------------------------------------
+    public static void setMob(ResourceLocation type, MobStats s) { MOBS.put(type, s); changed(); }
+    public static MobStats getMob(ResourceLocation type)          { return MOBS.get(type); }
+    public static void removeMob(ResourceLocation type)           { MOBS.remove(type); changed(); }
+    public static Map<ResourceLocation, MobStats> allMobs()       { return MOBS; }
 
-    public static void setBlock(ResourceLocation id, BlockStats s)     { BLOCK_OVERRIDES.put(id, s); }
-    public static BlockStats getBlock(ResourceLocation id)             { return BLOCK_OVERRIDES.get(id); }
-    public static void removeBlock(ResourceLocation id)                { BLOCK_OVERRIDES.remove(id); }
-    public static Map<ResourceLocation, BlockStats> allBlocks()        { return BLOCK_OVERRIDES; }
+    public static void setMobInstance(UUID id, MobStats s)        { MOB_INSTANCES.put(id, s); changed(); }
+    public static MobStats getMobInstance(UUID id)                { return MOB_INSTANCES.get(id); }
+    public static void removeMobInstance(UUID id)                 { MOB_INSTANCES.remove(id); changed(); }
+    public static Map<UUID, MobStats> allMobInstances()           { return MOB_INSTANCES; }
 
-    public static void setItem(ResourceLocation id, ItemStats s)       { ITEM_OVERRIDES.put(id, s); }
-    public static ItemStats getItem(ResourceLocation id)               { return ITEM_OVERRIDES.get(id); }
-    public static void removeItem(ResourceLocation id)                 { ITEM_OVERRIDES.remove(id); }
-    public static Map<ResourceLocation, ItemStats> allItems()          { return ITEM_OVERRIDES; }
+    /** The overrides that apply to a living entity: per-instance first, then per-type. Null for players. */
+    public static MobStats forEntity(LivingEntity entity) {
+        if (entity instanceof Player) return null;
+        if (MOBS.isEmpty() && MOB_INSTANCES.isEmpty()) return null;
+        MobStats s = MOB_INSTANCES.isEmpty() ? null : MOB_INSTANCES.get(entity.getUUID());
+        return s != null || MOBS.isEmpty() ? s : caches().mobs().get(entity.getType());
+    }
 
-    public static void setPlayer(UUID uuid, PlayerStats s)             { PLAYER_OVERRIDES.put(uuid, s); }
-    public static PlayerStats getPlayer(UUID uuid)                     { return PLAYER_OVERRIDES.get(uuid); }
-    public static void removePlayer(UUID uuid)                         { PLAYER_OVERRIDES.remove(uuid); }
-    public static Map<UUID, PlayerStats> allPlayers()                  { return PLAYER_OVERRIDES; }
+    // ---- blocks ------------------------------------------------------------------------
+    public static void setBlock(ResourceLocation id, BlockStats s) { BLOCKS.put(id, s); changed(); }
+    public static BlockStats getBlock(ResourceLocation id)         { return BLOCKS.get(id); }
+    public static void removeBlock(ResourceLocation id)            { BLOCKS.remove(id); changed(); }
+    public static Map<ResourceLocation, BlockStats> allBlocks()    { return BLOCKS; }
 
-    public static void setMobUuid(UUID uuid, MobStats stats)  { MOB_UUID_OVERRIDES.put(uuid, stats); }
-    public static MobStats getMobUuid(UUID uuid)               { return MOB_UUID_OVERRIDES.get(uuid); }
-    public static void removeMobUuid(UUID uuid)                { MOB_UUID_OVERRIDES.remove(uuid); }
-    public static Map<UUID, MobStats> allMobUuids()            { return MOB_UUID_OVERRIDES; }
+    public static void setBlockAt(String posKey, BlockStats s)     { BLOCK_POSITIONS.put(posKey, s); changed(); }
+    public static BlockStats getBlockAt(String posKey)             { return BLOCK_POSITIONS.get(posKey); }
+    public static void removeBlockAt(String posKey)                { BLOCK_POSITIONS.remove(posKey); changed(); }
+    public static Map<String, BlockStats> allBlockPositions()      { return BLOCK_POSITIONS; }
 
-    public static void setBlockAt(String posKey, BlockStats s)         { BLOCK_POS_OVERRIDES.put(posKey, s); }
-    public static BlockStats getBlockAt(String posKey)                 { return BLOCK_POS_OVERRIDES.get(posKey); }
-    public static void removeBlockAt(String posKey)                    { BLOCK_POS_OVERRIDES.remove(posKey); }
-    public static Map<String, BlockStats> allBlockPositions()          { return BLOCK_POS_OVERRIDES; }
+    public static boolean hasBlockOverrides() { return !BLOCKS.isEmpty() || !BLOCK_POSITIONS.isEmpty(); }
+
+    /** Type-level overrides for a block, or null. */
+    public static BlockStats forBlock(Block block) {
+        return BLOCKS.isEmpty() ? null : caches().blocks().get(block);
+    }
+
+    /**
+     * Overrides for the block at a position: a per-position override (if it was made for the
+     * block that is there now) takes priority over the type override.
+     */
+    public static BlockStats forBlockAt(Block block, BlockGetter getter, BlockPos pos) {
+        if (BLOCKS.isEmpty() && BLOCK_POSITIONS.isEmpty()) return null;
+        if (!BLOCK_POSITIONS.isEmpty() && getter instanceof Level level) {
+            BlockStats s = BLOCK_POSITIONS.get(makePosKey(level.dimension(), pos));
+            if (s != null && (s.block.isEmpty() || s.block.equals(BuiltInRegistries.BLOCK.getKey(block).toString())))
+                return s;
+        }
+        return forBlock(block);
+    }
+
+    // ---- items -------------------------------------------------------------------------
+    public static void setItem(ResourceLocation id, ItemStats s)   { ITEMS.put(id, s); changed(); }
+    public static ItemStats getItem(ResourceLocation id)           { return ITEMS.get(id); }
+    public static void removeItem(ResourceLocation id)             { ITEMS.remove(id); changed(); }
+    public static Map<ResourceLocation, ItemStats> allItems()      { return ITEMS; }
+
+    public static ItemStats forItem(Item item) {
+        return ITEMS.isEmpty() ? null : caches().items().get(item);
+    }
+
+    // ---- players -----------------------------------------------------------------------
+    public static void setPlayer(UUID id, PlayerStats s)           { PLAYERS.put(id, s); changed(); }
+    public static PlayerStats getPlayer(UUID id)                   { return PLAYERS.get(id); }
+    public static void removePlayer(UUID id)                       { PLAYERS.remove(id); changed(); }
+    public static Map<UUID, PlayerStats> allPlayers()              { return PLAYERS; }
+
+    public static PlayerStats forPlayer(Player player) {
+        return PLAYERS.isEmpty() ? null : PLAYERS.get(player.getUUID());
+    }
 }

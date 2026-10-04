@@ -5,19 +5,22 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "BlockBehaviourAccessor",
-    "BlockBehaviourMixin",
     "BlockBehaviourPropertiesAccessor",
     "BlockBehaviourStateMixin",
     "BlockMixin",
+    "EnchantmentHelperMixin",
     "EntityMixin",
     "FoodDataMixin",
-    "ItemMixin",
-    "AbstractArrowMixin",
+    "ItemStackMixin",
     "LivingEntityMixin",
     "MobMixin",
-    "PlayerMixin"
+    "PlayerMixin",
+    "ServerPlayerMixin"
   ],
-  "client": ["TitleScreenMixin", "PauseScreenMixin"],
+  "client": [
+    "PauseScreenMixin",
+    "TitleScreenMixin"
+  ],
   "injectors": {
     "defaultRequire": 1
   }

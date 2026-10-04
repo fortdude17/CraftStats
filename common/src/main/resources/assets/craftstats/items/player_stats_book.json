@@ -1,0 +1,6 @@
+{
+  "model": {
+    "type": "minecraft:model",
+    "model": "craftstats:item/player_stats_book"
+  }
+}

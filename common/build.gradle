@@ -1,5 +1,5 @@
 architectury {
-    common("fabric", "neoforge")
+    common(rootProject.enabled_platforms.split(","))
 }
 
 loom {
@@ -7,13 +7,7 @@ loom {
 }
 
 dependencies {
-    minecraft libs.minecraft
-    mappings loom.officialMojangMappings()
-
-    modImplementation libs.fabric.loader
-    modApi             libs.arch.common
-
-    modApi(libs.cloth.config.fabric) {
-        exclude group: "net.fabricmc.fabric-api"
-    }
+    // Only for @Environment annotations and mixin dependencies; nothing Fabric-specific is used.
+    modImplementation "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}"
+    modApi "dev.architectury:architectury:${rootProject.architectury_version}"
 }

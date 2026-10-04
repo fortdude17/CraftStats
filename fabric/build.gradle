@@ -1,5 +1,5 @@
 plugins {
-    alias(libs.plugins.shadow)
+    id "com.gradleup.shadow"
 }
 
 architectury {
@@ -12,45 +12,41 @@ loom {
 }
 
 configurations {
-    common
-    shadowCommon
+    common {
+        canBeResolved = true
+        canBeConsumed = false
+    }
     compileClasspath.extendsFrom common
     runtimeClasspath.extendsFrom common
     developmentFabric.extendsFrom common
+
+    // Files in this configuration are bundled into the mod jar.
+    shadowBundle {
+        canBeResolved = true
+        canBeConsumed = false
+    }
 }
 
 dependencies {
-    minecraft libs.minecraft
-    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}"
+    modImplementation "dev.architectury:architectury-fabric:${rootProject.architectury_version}"
 
-    modImplementation libs.fabric.loader
-    modApi             libs.fabric.api
-    modApi             libs.arch.fabric
+    // Optional: config button in Mod Menu.
+    modCompileOnly("com.terraformersmc:modmenu:${rootProject.modmenu_version}") { transitive = false }
 
-    modApi(libs.cloth.config.fabric) {
-        exclude group: "net.fabricmc.fabric-api"
-    }
-    modImplementation(libs.modmenu) {
-        transitive = false
-    }
-
-    common(project(path: ":common", configuration: "namedElements")) { transitive false }
-    shadowCommon(project(path: ":common", configuration: "transformProductionFabric")) { transitive false }
+    common(project(path: ":common", configuration: "namedElements")) { transitive = false }
+    shadowBundle(project(path: ":common", configuration: "transformProductionFabric"))
 }
 
 shadowJar {
-    configurations    = [project.configurations.shadowCommon]
+    configurations = [project.configurations.shadowBundle]
     archiveClassifier = "dev-shadow"
 }
 
 remapJar {
-    input.set(shadowJar.archiveFile)
+    inputFile.set(shadowJar.archiveFile)
     dependsOn shadowJar
-    archiveClassifier = null
-}
-
-jar {
-    archiveClassifier = "dev"
 }
 
 sourcesJar {

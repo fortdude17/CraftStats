@@ -14,7 +14,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-public class StatResetScreen extends Screen {
+public class StatResetScreen extends BaseScreen {
 
     private static final int ROW_H   = 22;
     private static final int PAD     = 6;
@@ -85,7 +85,7 @@ public class StatResetScreen extends Screen {
         try {
             var root = JsonParser.parseString(Files.readString(statsFile)).getAsJsonObject();
             int n = 0;
-            for (String key : new String[]{"mobs","blocks","items","players","block_positions"})
+            for (String key : new String[]{"mobs","blocks","items","players","mob_instances","block_positions"})
                 if (root.has(key)) n += root.getAsJsonObject(key).size();
             return n;
         } catch (Exception e) { return 0; }
@@ -103,7 +103,17 @@ public class StatResetScreen extends Screen {
         scanWorlds();
     }
 
+    private boolean confirmDeleteAll;
+
     private void deleteAll() {
+        if (!confirmDeleteAll) {
+            confirmDeleteAll = true;
+            deleteAllBtn.setMessage(Component.literal("Click again to confirm"));
+            flash("§eThis deletes CraftStats data in every world. Click again to confirm.");
+            return;
+        }
+        confirmDeleteAll = false;
+        deleteAllBtn.setMessage(Component.literal("Delete ALL Worlds' Stats"));
         int count = 0;
         for (WorldEntry e : new ArrayList<>(entries)) {
             try { Files.deleteIfExists(e.statsFile()); count++; }
@@ -123,7 +133,12 @@ public class StatResetScreen extends Screen {
             deleteAllBtn.active = !entries.isEmpty();
     }
 
-    @Override public void tick() { if (msgTimer > 0) msgTimer--; }
+    @Override public void tick() {
+        if (msgTimer > 0 && --msgTimer == 0 && confirmDeleteAll) {
+            confirmDeleteAll = false;
+            deleteAllBtn.setMessage(Component.literal("Delete ALL Worlds' Stats"));
+        }
+    }
 
     @Override
     public void renderBackground(GuiGraphics g, int mx, int my, float delta) {}
@@ -162,7 +177,7 @@ public class StatResetScreen extends Screen {
                 boolean hov = mx >= listX && mx < listX + listW && my >= rowY && my < rowY + ROW_H;
                 if (sel)      g.fill(listX + 1, rowY, listX + listW - 1, rowY + ROW_H, 0xFF1E3A8A);
                 else if (hov) g.fill(listX + 1, rowY, listX + listW - 1, rowY + ROW_H, 0xFF1A2A50);
-                String name = e.worldName().length() > 40 ? e.worldName().substring(0,39) + "…" : e.worldName();
+                String name = font.plainSubstrByWidth(e.worldName(), listW / 2);
                 String info = e.entryCount() + " custom entr" + (e.entryCount() == 1 ? "y" : "ies");
                 g.drawString(font, (sel ? "§e▶ §f" : "§7  §f") + name, listX + 6, rowY + (ROW_H - 8) / 2, 0xFFFFFFFF, false);
                 g.drawString(font, "§7" + info, listX + listW - font.width(info) - 8, rowY + (ROW_H - 8) / 2, 0xFFAAAAAA, false);
@@ -181,8 +196,7 @@ public class StatResetScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(double mx, double my, int btn) {
-        if (super.mouseClicked(mx, my, btn)) return true;
+    protected boolean onMouseClicked(double mx, double my, int btn) {
         int listX   = PAD * 2;
         int listY   = HEADER_H + PAD;
         int footerY = this.height - FOOTER_H - PAD;
@@ -204,5 +218,4 @@ public class StatResetScreen extends Screen {
         g.fill(x1, y1, x1 + 1, y2, c); g.fill(x2 - 1, y1, x2, y2, c);
     }
 
-    @Override public boolean isPauseScreen() { return false; }
 }

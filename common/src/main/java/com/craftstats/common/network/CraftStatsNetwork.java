@@ -1,325 +1,308 @@
 package com.craftstats.common.network;
 
 import com.craftstats.common.CraftStats;
+import com.craftstats.common.config.CraftStatsConfig;
 import com.craftstats.common.stats.*;
-import com.craftstats.common.util.JsonUtil;
+import com.craftstats.common.util.Compat;
+import com.craftstats.common.util.Permissions;
 import com.craftstats.common.util.StatPersistence;
 import dev.architectury.networking.NetworkManager;
+import dev.architectury.platform.Platform;
+import dev.architectury.utils.Env;
 import io.netty.buffer.Unpooled;
+import net.minecraft.ChatFormatting;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.level.Level;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
+/**
+ * Client → server: apply / reset / reset-all requests (validated and permission-checked).
+ * Server → client: a compressed snapshot of every override, sent on join and after each change.
+ */
 public final class CraftStatsNetwork {
 
-    public static final ResourceLocation APPLY_MOB_STATS =
-            ResourceLocation.fromNamespaceAndPath(CraftStats.MOD_ID, "apply_mob_stats");
-    public static final ResourceLocation APPLY_BLOCK_STATS =
-            ResourceLocation.fromNamespaceAndPath(CraftStats.MOD_ID, "apply_block_stats");
-    public static final ResourceLocation APPLY_ITEM_STATS =
-            ResourceLocation.fromNamespaceAndPath(CraftStats.MOD_ID, "apply_item_stats");
-    public static final ResourceLocation APPLY_PLAYER_STATS =
-            ResourceLocation.fromNamespaceAndPath(CraftStats.MOD_ID, "apply_player_stats");
-    public static final ResourceLocation RESET_TARGET =
-            ResourceLocation.fromNamespaceAndPath(CraftStats.MOD_ID, "reset_target");
-    public static final ResourceLocation APPLY_BLOCK_POS_STATS =
-            ResourceLocation.fromNamespaceAndPath(CraftStats.MOD_ID, "apply_block_pos_stats");
-    public static final ResourceLocation RESET_BLOCK_POS =
-            ResourceLocation.fromNamespaceAndPath(CraftStats.MOD_ID, "reset_block_pos");
-    public static final ResourceLocation RESET_ALL =
-            ResourceLocation.fromNamespaceAndPath(CraftStats.MOD_ID, "reset_all");
-    public static final ResourceLocation APPLY_MOB_UUID_STATS =
-            ResourceLocation.fromNamespaceAndPath(CraftStats.MOD_ID, "apply_mob_uuid_stats");
-    public static final ResourceLocation RESET_MOB_UUID =
-            ResourceLocation.fromNamespaceAndPath(CraftStats.MOD_ID, "reset_mob_uuid");
+    public static final ResourceLocation APPLY     = id("apply");
+    public static final ResourceLocation RESET     = id("reset");
+    public static final ResourceLocation RESET_ALL = id("reset_all");
+    public static final ResourceLocation SYNC      = id("sync");
 
-    public static void registerServerReceivers() {
-        NetworkManager.registerReceiver(NetworkManager.Side.C2S, APPLY_MOB_STATS,
-                (buf, ctx) -> {
-                    String typeId = buf.readUtf();
-                    String json   = buf.readUtf();
-                    ctx.queue(() -> {
-                        ServerPlayer player = (ServerPlayer) ctx.getPlayer();
-                        if (!hasPermission(player)) return;
-                        ResourceLocation rl = ResourceLocation.parse(typeId);
-                        MobStats stats = JsonUtil.mobStatsFromJson(json);
-                        StatRegistry.setMob(rl, stats);
+    private static final int MAX_SYNC_BYTES = 4 * 1024 * 1024;
+    private static final Pattern POS_KEY = Pattern.compile("^([a-z0-9_.-]+:[a-z0-9_./-]+)\\|(-?\\d+)\\|(-?\\d+)\\|(-?\\d+)$");
 
-                        StatPersistence.save();
-                    });
-                });
+    /** What a request targets. */
+    public enum Kind {
+        MOB(TargetType.MOB), MOB_INSTANCE(TargetType.MOB), BLOCK(TargetType.BLOCK), BLOCK_POS(TargetType.BLOCK),
+        ITEM(TargetType.ITEM), PLAYER(TargetType.PLAYER);
 
-        NetworkManager.registerReceiver(NetworkManager.Side.C2S, APPLY_BLOCK_STATS,
-                (buf, ctx) -> {
-                    String blockId = buf.readUtf();
-                    String json    = buf.readUtf();
-                    ctx.queue(() -> {
-                        if (!hasPermission((ServerPlayer) ctx.getPlayer())) return;
-                        StatRegistry.setBlock(ResourceLocation.parse(blockId),
-                                JsonUtil.blockStatsFromJson(json));
-                        StatPersistence.save();
-                    });
-                });
-
-        NetworkManager.registerReceiver(NetworkManager.Side.C2S, APPLY_ITEM_STATS,
-                (buf, ctx) -> {
-                    String itemId = buf.readUtf();
-                    String json   = buf.readUtf();
-                    ctx.queue(() -> {
-                        if (!hasPermission((ServerPlayer) ctx.getPlayer())) return;
-                        StatRegistry.setItem(ResourceLocation.parse(itemId),
-                                JsonUtil.itemStatsFromJson(json));
-                        StatPersistence.save();
-                    });
-                });
-
-        NetworkManager.registerReceiver(NetworkManager.Side.C2S, APPLY_PLAYER_STATS,
-                (buf, ctx) -> {
-                    String uuidStr = buf.readUtf();
-                    String json    = buf.readUtf();
-                    ctx.queue(() -> {
-                        if (!hasPermission((ServerPlayer) ctx.getPlayer())) return;
-                        UUID uuid = UUID.fromString(uuidStr);
-                        PlayerStats stats = JsonUtil.playerStatsFromJson(json);
-                        StatRegistry.setPlayer(uuid, stats);
-                        ServerPlayer target = ((ServerPlayer) ctx.getPlayer()).getServer()
-                                .getPlayerList().getPlayer(uuid);
-                        if (target != null) applyAllPlayerAttributes(target, stats);
-                        StatPersistence.save();
-                    });
-                });
-
-        NetworkManager.registerReceiver(NetworkManager.Side.C2S, RESET_TARGET,
-                (buf, ctx) -> {
-                    String targetType = buf.readUtf();
-                    String targetId   = buf.readUtf();
-                    ctx.queue(() -> {
-                        if (!hasPermission((ServerPlayer) ctx.getPlayer())) return;
-                        switch (targetType) {
-                            case "mob"    -> StatRegistry.removeMob(ResourceLocation.parse(targetId));
-                            case "block"  -> StatRegistry.removeBlock(ResourceLocation.parse(targetId));
-                            case "item"   -> StatRegistry.removeItem(ResourceLocation.parse(targetId));
-                            case "player" -> StatRegistry.removePlayer(UUID.fromString(targetId));
-                        }
-                        StatPersistence.save();
-                    });
-                });
-
-        NetworkManager.registerReceiver(NetworkManager.Side.C2S, APPLY_BLOCK_POS_STATS,
-                (buf, ctx) -> {
-                    String posKey = buf.readUtf();
-                    String json   = buf.readUtf();
-                    ctx.queue(() -> {
-                        if (!hasPermission((ServerPlayer) ctx.getPlayer())) return;
-                        StatRegistry.setBlockAt(posKey, JsonUtil.blockStatsFromJson(json));
-                        StatPersistence.save();
-                    });
-                });
-
-        NetworkManager.registerReceiver(NetworkManager.Side.C2S, RESET_BLOCK_POS,
-                (buf, ctx) -> {
-                    String posKey = buf.readUtf();
-                    ctx.queue(() -> {
-                        if (!hasPermission((ServerPlayer) ctx.getPlayer())) return;
-                        StatRegistry.removeBlockAt(posKey);
-                        StatPersistence.save();
-                    });
-                });
-
-        NetworkManager.registerReceiver(NetworkManager.Side.C2S, APPLY_MOB_UUID_STATS,
-                (buf, ctx) -> {
-                    String uuidStr = buf.readUtf();
-                    String json    = buf.readUtf();
-                    ctx.queue(() -> {
-                        ServerPlayer player = (ServerPlayer) ctx.getPlayer();
-                        if (!hasPermission(player)) return;
-                        UUID uuid  = UUID.fromString(uuidStr);
-                        MobStats stats = JsonUtil.mobStatsFromJson(json);
-                        StatRegistry.setMobUuid(uuid, stats);
-                        player.getServer().getAllLevels().forEach(level ->
-                            level.getAllEntities().forEach(e -> {
-                                if (e instanceof LivingEntity living && living.getUUID().equals(uuid))
-                                    applyMobAttributesToEntity(living, stats);
-                            })
-                        );
-                        StatPersistence.save();
-                    });
-                });
-
-        NetworkManager.registerReceiver(NetworkManager.Side.C2S, RESET_MOB_UUID,
-                (buf, ctx) -> {
-                    String uuidStr = buf.readUtf();
-                    ctx.queue(() -> {
-                        if (!hasPermission((ServerPlayer) ctx.getPlayer())) return;
-                        StatRegistry.removeMobUuid(UUID.fromString(uuidStr));
-                        StatPersistence.save();
-                    });
-                });
-
-        NetworkManager.registerReceiver(NetworkManager.Side.C2S, RESET_ALL,
-                (buf, ctx) -> {
-                    ctx.queue(() -> {
-                        ServerPlayer player = (ServerPlayer) ctx.getPlayer();
-                        if (!hasPermission(player)) return;
-                        StatRegistry.init();
-                        StatPersistence.save();
-
-                        PlayerStats defaults = new PlayerStats();
-                        player.getServer().getPlayerList().getPlayers()
-                                .forEach(p -> applyAllPlayerAttributes(p, defaults));
-                    });
-                });
+        public final TargetType type;
+        Kind(TargetType type) { this.type = type; }
     }
 
-    public static void registerClientReceivers() {}
+    private CraftStatsNetwork() {}
 
-    public static void sendApplyMobStats(String entityTypeId, MobStats stats) {
-        RegistryFriendlyByteBuf buf = buf();
-        buf.writeUtf(entityTypeId);
-        buf.writeUtf(JsonUtil.toCompactJson(stats));
-        NetworkManager.sendToServer(APPLY_MOB_STATS, buf);
+    private static ResourceLocation id(String path) {
+        return ResourceLocation.fromNamespaceAndPath(CraftStats.MOD_ID, path);
     }
 
-    public static void sendApplyBlockStats(String blockId, BlockStats stats) {
-        RegistryFriendlyByteBuf buf = buf();
-        buf.writeUtf(blockId);
-        buf.writeUtf(JsonUtil.toCompactJson(stats));
-        NetworkManager.sendToServer(APPLY_BLOCK_STATS, buf);
+    // ---- registration --------------------------------------------------------------------
+
+    public static void registerCommon() {
+        NetworkManager.registerReceiver(NetworkManager.Side.C2S, APPLY, (buf, ctx) -> {
+            Kind kind = buf.readEnum(Kind.class);
+            String key = buf.readUtf(512);
+            String json = buf.readUtf();
+            ctx.queue(() -> handleApply((ServerPlayer) ctx.getPlayer(), kind, key, json));
+        });
+        NetworkManager.registerReceiver(NetworkManager.Side.C2S, RESET, (buf, ctx) -> {
+            Kind kind = buf.readEnum(Kind.class);
+            String key = buf.readUtf(512);
+            ctx.queue(() -> handleReset((ServerPlayer) ctx.getPlayer(), kind, key));
+        });
+        NetworkManager.registerReceiver(NetworkManager.Side.C2S, RESET_ALL, (buf, ctx) ->
+                ctx.queue(() -> handleResetAll((ServerPlayer) ctx.getPlayer())));
+
+        // On a dedicated server the S2C type must be registered here; clients register it
+        // together with their receiver in registerClient().
+        if (Platform.getEnvironment() == Env.SERVER) NetworkManager.registerS2CPayloadType(SYNC);
     }
 
-    public static void sendApplyItemStats(String itemId, ItemStats stats) {
-        RegistryFriendlyByteBuf buf = buf();
-        buf.writeUtf(itemId);
-        buf.writeUtf(JsonUtil.toCompactJson(stats));
-        NetworkManager.sendToServer(APPLY_ITEM_STATS, buf);
+    public static void registerClient(Consumer<byte[]> onSync) {
+        NetworkManager.registerReceiver(NetworkManager.Side.S2C, SYNC, (buf, ctx) -> {
+            byte[] data = buf.readByteArray(MAX_SYNC_BYTES);
+            ctx.queue(() -> onSync.accept(data));
+        });
     }
 
-    public static void sendApplyPlayerStats(UUID playerUuid, PlayerStats stats) {
-        RegistryFriendlyByteBuf buf = buf();
-        buf.writeUtf(playerUuid.toString());
-        buf.writeUtf(JsonUtil.toCompactJson(stats));
-        NetworkManager.sendToServer(APPLY_PLAYER_STATS, buf);
+    // ---- client → server -------------------------------------------------------------------
+
+    public static void sendApply(Kind kind, String key, Object stats) {
+        RegistryFriendlyByteBuf buf = clientBuf();
+        buf.writeEnum(kind);
+        buf.writeUtf(key, 512);
+        buf.writeUtf(StatSchema.toJson(stats));
+        NetworkManager.sendToServer(APPLY, buf);
     }
 
-    public static void sendReset(String targetType, String targetId) {
-        RegistryFriendlyByteBuf buf = buf();
-        buf.writeUtf(targetType);
-        buf.writeUtf(targetId);
-        NetworkManager.sendToServer(RESET_TARGET, buf);
-    }
-
-    public static void sendApplyBlockPosStats(String posKey, BlockStats stats) {
-        RegistryFriendlyByteBuf buf = buf();
-        buf.writeUtf(posKey);
-        buf.writeUtf(JsonUtil.toCompactJson(stats));
-        NetworkManager.sendToServer(APPLY_BLOCK_POS_STATS, buf);
-    }
-
-    public static void sendResetBlockPos(String posKey) {
-        RegistryFriendlyByteBuf buf = buf();
-        buf.writeUtf(posKey);
-        NetworkManager.sendToServer(RESET_BLOCK_POS, buf);
-    }
-
-    public static void sendApplyMobUuidStats(UUID entityUuid, MobStats stats) {
-        RegistryFriendlyByteBuf buf = buf();
-        buf.writeUtf(entityUuid.toString());
-        buf.writeUtf(JsonUtil.toCompactJson(stats));
-        NetworkManager.sendToServer(APPLY_MOB_UUID_STATS, buf);
-    }
-
-    public static void sendResetMobUuid(UUID entityUuid) {
-        RegistryFriendlyByteBuf buf = buf();
-        buf.writeUtf(entityUuid.toString());
-        NetworkManager.sendToServer(RESET_MOB_UUID, buf);
+    public static void sendReset(Kind kind, String key) {
+        RegistryFriendlyByteBuf buf = clientBuf();
+        buf.writeEnum(kind);
+        buf.writeUtf(key, 512);
+        NetworkManager.sendToServer(RESET, buf);
     }
 
     public static void sendResetAll() {
-        NetworkManager.sendToServer(RESET_ALL, buf());
+        NetworkManager.sendToServer(RESET_ALL, clientBuf());
     }
 
-    private static RegistryFriendlyByteBuf buf() {
+    private static RegistryFriendlyByteBuf clientBuf() {
         return new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
     }
 
-    private static boolean hasPermission(ServerPlayer player) {
+    // ---- server handlers -------------------------------------------------------------------
+
+    private static void handleApply(ServerPlayer player, Kind kind, String key, String json) {
+        MinecraftServer server = Compat.server(player);
+        if (server == null || !checkAccess(player, kind)) return;
+        try {
+            switch (kind) {
+                case MOB -> {
+                    ResourceLocation id = registered(BuiltInRegistries.ENTITY_TYPE, key);
+                    if (blacklisted(player, id.toString())) return;
+                    StatRegistry.setMob(id, StatSchema.mob(json));
+                    StatApplier.refreshMobs(server, id);
+                }
+                case MOB_INSTANCE -> {
+                    UUID uuid = UUID.fromString(key);
+                    Entity entity = findEntity(server, uuid);
+                    if (entity != null && blacklisted(player, EntityType.getKey(entity.getType()).toString())) return;
+                    StatRegistry.setMobInstance(uuid, StatSchema.mob(json));
+                    StatApplier.refreshMob(server, uuid);
+                }
+                case BLOCK -> {
+                    ResourceLocation id = registered(BuiltInRegistries.BLOCK, key);
+                    if (blacklisted(player, id.toString())) return;
+                    StatRegistry.setBlock(id, StatSchema.block(json));
+                }
+                case BLOCK_POS -> {
+                    BlockStats stats = StatSchema.block(json);
+                    stats.block = blockAt(server, key);
+                    if (blacklisted(player, stats.block)) return;
+                    StatRegistry.setBlockAt(key, stats);
+                }
+                case ITEM -> {
+                    ResourceLocation id = registered(BuiltInRegistries.ITEM, key);
+                    if (blacklisted(player, id.toString())) return;
+                    StatRegistry.setItem(id, StatSchema.item(json));
+                }
+                case PLAYER -> {
+                    UUID uuid = UUID.fromString(key);
+                    StatRegistry.setPlayer(uuid, StatSchema.player(json));
+                    StatApplier.refreshPlayer(server, uuid);
+                }
+            }
+        } catch (Exception e) {
+            deny(player, "Rejected invalid " + kind.type.displayName().toLowerCase() + " data: " + e.getMessage());
+            return;
+        }
+        changed(server);
+    }
+
+    private static void handleReset(ServerPlayer player, Kind kind, String key) {
+        MinecraftServer server = Compat.server(player);
+        if (server == null || !checkAccess(player, kind)) return;
+        try {
+            switch (kind) {
+                case MOB -> {
+                    ResourceLocation id = ResourceLocation.parse(key);
+                    StatRegistry.removeMob(id);
+                    StatApplier.refreshMobs(server, id);
+                }
+                case MOB_INSTANCE -> {
+                    UUID uuid = UUID.fromString(key);
+                    StatRegistry.removeMobInstance(uuid);
+                    StatApplier.refreshMob(server, uuid);
+                }
+                case BLOCK     -> StatRegistry.removeBlock(ResourceLocation.parse(key));
+                case BLOCK_POS -> StatRegistry.removeBlockAt(key);
+                case ITEM      -> StatRegistry.removeItem(ResourceLocation.parse(key));
+                case PLAYER -> {
+                    UUID uuid = UUID.fromString(key);
+                    StatRegistry.removePlayer(uuid);
+                    StatApplier.refreshPlayer(server, uuid);
+                }
+            }
+        } catch (Exception e) {
+            deny(player, "Invalid reset request: " + e.getMessage());
+            return;
+        }
+        changed(server);
+    }
+
+    private static void handleResetAll(ServerPlayer player) {
+        MinecraftServer server = Compat.server(player);
+        if (server == null) return;
+        if (!Permissions.mayEdit(player)) { deny(player, "You don't have permission to use CraftStats."); return; }
+        resetAll(server);
+    }
+
+    /** Removes every override in the world and restores loaded mobs and online players. */
+    public static void resetAll(MinecraftServer server) {
+        StatRegistry.clear();
+        StatApplier.refreshMobs(server, null);
+        StatApplier.refreshAllPlayers(server);
+        changed(server);
+    }
+
+    /** Persist, then push the new state to every client. */
+    public static void changed(MinecraftServer server) {
+        StatPersistence.save();
+        broadcastSync(server);
+    }
+
+    // ---- server → client -------------------------------------------------------------------
+
+    public static void broadcastSync(MinecraftServer server) {
+        byte[] data = encodeSnapshot();
+        for (ServerPlayer p : server.getPlayerList().getPlayers()) sendSync(p, data);
+    }
+
+    public static void sendSync(ServerPlayer player) {
+        sendSync(player, encodeSnapshot());
+    }
+
+    private static void sendSync(ServerPlayer player, byte[] data) {
+        if (!NetworkManager.canPlayerReceive(player, SYNC)) return; // client without CraftStats
+        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), player.registryAccess());
+        buf.writeByteArray(data);
+        NetworkManager.sendToPlayer(player, SYNC, buf);
+    }
+
+    private static byte[] encodeSnapshot() {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try (GZIPOutputStream gz = new GZIPOutputStream(out)) {
+            gz.write(StatPersistence.snapshot().toString().getBytes(StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
+        return out.toByteArray();
+    }
+
+    public static String decodeSnapshot(byte[] data) throws IOException {
+        try (GZIPInputStream in = new GZIPInputStream(new ByteArrayInputStream(data))) {
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
+
+    // ---- validation --------------------------------------------------------------------------
+
+    private static boolean checkAccess(ServerPlayer player, Kind kind) {
         if (player == null) return false;
-
-        if (!player.getServer().isDedicatedServer()) return true;
-        return player.hasPermissions(2) || player.isCreative();
+        if (!Permissions.mayEdit(player)) {
+            deny(player, "You don't have permission to use CraftStats.");
+            return false;
+        }
+        if (!CraftStatsConfig.get().isEnabled(kind.type)) {
+            deny(player, "The " + kind.type.displayName().toLowerCase() + " editor is disabled on this server.");
+            return false;
+        }
+        return true;
     }
 
-    private static void applyMobStatsToLoadedEntities(ServerPlayer requestingPlayer,
-                                                       ResourceLocation typeId, MobStats stats) {
-        requestingPlayer.getServer().getAllLevels().forEach(level ->
-                level.getAllEntities().forEach(e -> {
-                    if (e instanceof LivingEntity living) {
-                        if (typeId.equals(EntityType.getKey(living.getType())))
-                            applyMobAttributesToEntity(living, stats);
-                    }
-                })
-        );
+    private static boolean blacklisted(ServerPlayer player, String id) {
+        if (!CraftStatsConfig.get().isBlacklisted(id)) return false;
+        deny(player, id + " is blacklisted in the CraftStats config.");
+        return true;
     }
 
-    public static void applyMobAttributesToEntity(LivingEntity entity, MobStats stats) {
-
-        if (stats.maxHealth >= 0)        setAttr(entity, Attributes.MAX_HEALTH,          stats.maxHealth);
-        if (stats.attackDamage >= 0)     setAttr(entity, Attributes.ATTACK_DAMAGE,       stats.attackDamage);
-        if (stats.armor >= 0)            setAttr(entity, Attributes.ARMOR,               stats.armor);
-        if (stats.knockbackResist >= 0)  setAttr(entity, Attributes.KNOCKBACK_RESISTANCE, stats.knockbackResist);
-        if (stats.moveSpeed >= 0)        setAttr(entity, Attributes.MOVEMENT_SPEED,      stats.moveSpeed);
-        if (stats.followRange >= 0)      setAttr(entity, Attributes.FOLLOW_RANGE,        stats.followRange);
-        if (stats.sizeScale >= 0)        setAttr(entity, Attributes.SCALE,               stats.sizeScale);
-        if (entity.getHealth() > entity.getMaxHealth())
-            entity.setHealth(entity.getMaxHealth());
+    private static <T> ResourceLocation registered(Registry<T> registry, String key) {
+        ResourceLocation id = ResourceLocation.tryParse(key);
+        if (id == null || !registry.containsKey(id)) throw new IllegalArgumentException("unknown id '" + key + "'");
+        return id;
     }
 
-    public static void applyAllPlayerAttributes(ServerPlayer target, PlayerStats stats) {
-
-        setAttr(target, Attributes.MAX_HEALTH,                    stats.maxHealth);
-        setAttr(target, Attributes.ATTACK_DAMAGE,                 stats.baseDamage);
-        setAttr(target, Attributes.ATTACK_SPEED,                  stats.attackSpeed);
-        setAttr(target, Attributes.MOVEMENT_SPEED,                stats.walkSpeed);
-        setAttr(target, Attributes.FLYING_SPEED,                  stats.flySpeed);
-        setAttr(target, Attributes.STEP_HEIGHT,                   stats.stepHeight);
-        setAttr(target, Attributes.JUMP_STRENGTH,                 stats.jumpForce);
-        setAttr(target, Attributes.ENTITY_INTERACTION_RANGE,      stats.reachDistance);
-        setAttr(target, Attributes.BLOCK_INTERACTION_RANGE,       stats.reachDistance);
-        setAttr(target, Attributes.OXYGEN_BONUS, stats.drownImmune ? 10_000.0 : 0.0);
-
-        setAttr(target, Attributes.ARMOR,                         stats.armor);
-        setAttr(target, Attributes.ARMOR_TOUGHNESS,               stats.armorToughness);
-        setAttr(target, Attributes.KNOCKBACK_RESISTANCE,          stats.knockbackResistance);
-        setAttr(target, Attributes.LUCK,                          stats.luck);
-        setAttr(target, Attributes.ATTACK_KNOCKBACK,              stats.attackKnockback);
-
-        setAttr(target, Attributes.GRAVITY,                       stats.gravity);
-        setAttr(target, Attributes.FALL_DAMAGE_MULTIPLIER,        stats.fallDamageMultiplier);
-        setAttr(target, Attributes.SAFE_FALL_DISTANCE,            stats.safeFallDistance);
-        setAttr(target, Attributes.BURNING_TIME,                  stats.burningTime);
-        setAttr(target, Attributes.EXPLOSION_KNOCKBACK_RESISTANCE, stats.explosionKbResistance);
-        setAttr(target, Attributes.MINING_EFFICIENCY,             stats.miningEfficiency);
-        setAttr(target, Attributes.MOVEMENT_EFFICIENCY,           stats.movementEfficiency);
-        setAttr(target, Attributes.SNEAKING_SPEED,                stats.sneakingSpeed);
-        setAttr(target, Attributes.SUBMERGED_MINING_SPEED,        stats.submergedMiningSpeed);
-        setAttr(target, Attributes.SWEEPING_DAMAGE_RATIO,         stats.sweepingDamageRatio);
-        setAttr(target, Attributes.WATER_MOVEMENT_EFFICIENCY,     stats.waterMovementEfficiency);
-        setAttr(target, Attributes.MAX_ABSORPTION,                stats.maxAbsorption);
-
-        if (target.getHealth() > target.getMaxHealth())
-            target.setHealth(target.getMaxHealth());
+    /** Validates a position key and returns the id of the block currently there. */
+    private static String blockAt(MinecraftServer server, String key) {
+        Matcher m = POS_KEY.matcher(key);
+        if (!m.matches()) throw new IllegalArgumentException("bad block position '" + key + "'");
+        ResourceKey<Level> dim = ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(m.group(1)));
+        ServerLevel level = server.getLevel(dim);
+        if (level == null) throw new IllegalArgumentException("unknown dimension " + m.group(1));
+        BlockPos pos = new BlockPos(Integer.parseInt(m.group(2)), Integer.parseInt(m.group(3)), Integer.parseInt(m.group(4)));
+        return BuiltInRegistries.BLOCK.getKey(level.getBlockState(pos).getBlock()).toString();
     }
 
-    private static void setAttr(LivingEntity entity,
-                                  net.minecraft.core.Holder<net.minecraft.world.entity.ai.attributes.Attribute> attr,
-                                  double value) {
-        var instance = entity.getAttribute(attr);
-        if (instance != null) instance.setBaseValue(value);
+    private static Entity findEntity(MinecraftServer server, UUID uuid) {
+        for (ServerLevel level : server.getAllLevels()) {
+            Entity e = level.getEntity(uuid);
+            if (e != null) return e;
+        }
+        return null;
+    }
+
+    private static void deny(ServerPlayer player, String message) {
+        player.sendSystemMessage(Component.literal("CraftStats: " + message).withStyle(ChatFormatting.RED));
     }
 }

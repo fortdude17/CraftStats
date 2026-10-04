@@ -1,34 +1,35 @@
 package com.craftstats.common.item;
 
-import com.craftstats.common.config.CraftStatsConfig;
-import com.craftstats.common.stats.BlockStats;
-import com.craftstats.common.stats.MobStats;
-import com.craftstats.common.stats.StatRegistry;
-import com.craftstats.common.util.JsonUtil;
-import com.craftstats.common.util.ScreenOpener;
+import com.craftstats.common.client.ClientHooks;
+import com.craftstats.common.util.Permissions;
+import dev.architectury.platform.Platform;
+import dev.architectury.utils.Env;
 import net.minecraft.ChatFormatting;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.InteractionResultHolder;
-import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.SpawnEggItem;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.HitResult;
-
+//#if MC >= 1.21.5
+//$ import net.minecraft.world.item.component.TooltipDisplay;
+//$ import java.util.function.Consumer;
+//#else
 import java.util.List;
+//#endif
+//#if MC < 1.21.2
+import net.minecraft.world.InteractionResultHolder;
+//#endif
 
+/** Right-click anything to edit it. All editing happens client-side in a screen. */
 public class CraftWandItem extends Item {
 
     public CraftWandItem(Properties props) {
@@ -37,159 +38,89 @@ public class CraftWandItem extends Item {
 
     @Override
     public InteractionResult useOn(UseOnContext ctx) {
-        Level  level  = ctx.getLevel();
         Player player = ctx.getPlayer();
+        Level level = ctx.getLevel();
         if (player == null) return InteractionResult.PASS;
-        if (!canUse(player)) {
-            if (level.isClientSide)
-                player.sendSystemMessage(Component.literal("CraftStats: requires operator or creative mode.")
-                        .withStyle(ChatFormatting.RED));
-            return InteractionResult.FAIL;
+        if (!mayUse(player)) return InteractionResult.FAIL;
+        if (level.isClientSide()) {
+            BlockPos pos = ctx.getClickedPos();
+            if (player.isShiftKeyDown()) ClientHooks.openBlockEditor(level.getBlockState(pos).getBlock());
+            else ClientHooks.openBlockEditorAt(level, pos);
         }
-        if (level.isClientSide) {
-            net.minecraft.core.BlockPos clickedPos = ctx.getClickedPos();
-            Block block = level.getBlockState(clickedPos).getBlock();
-            if (player.isShiftKeyDown()) {
-
-                ScreenOpener.openBlockEditor(block);
-            } else {
-
-                String posKey = StatRegistry.makePosKey(level.dimension(), clickedPos);
-                ScreenOpener.openBlockEditorAt(posKey, block, clickedPos);
-            }
-        }
-        return InteractionResult.sidedSuccess(level.isClientSide);
+        return success(level);
     }
 
+    //#if MC >= 1.21.2
+    //$ @Override
+    //$ public InteractionResult use(Level level, Player player, InteractionHand hand) {
+    //$     if (hand != InteractionHand.MAIN_HAND || !mayUse(player)) return InteractionResult.PASS;
+    //$     if (level.isClientSide()) openFromAir(player);
+    //$     return success(level);
+    //$ }
+    //#else
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
-        if (hand != InteractionHand.MAIN_HAND)
-            return InteractionResultHolder.pass(player.getItemInHand(hand));
-        if (!canUse(player))
-            return InteractionResultHolder.pass(player.getItemInHand(hand));
+        ItemStack stack = player.getItemInHand(hand);
+        if (hand != InteractionHand.MAIN_HAND || !mayUse(player)) return InteractionResultHolder.pass(stack);
+        if (level.isClientSide()) openFromAir(player);
+        return InteractionResultHolder.sidedSuccess(stack, level.isClientSide());
+    }
+    //#endif
 
-        if (level.isClientSide) {
-
-            ItemStack offhand = player.getItemInHand(InteractionHand.OFF_HAND);
-            if (offhand.getItem() instanceof SpawnEggItem) {
-                String typeId = spawnEggEntityTypeId(offhand);
-                if (typeId != null) {
-                    ScreenOpener.openMobEditorById(typeId);
-                    return InteractionResultHolder.sidedSuccess(player.getItemInHand(hand), true);
-                }
-            }
-
-            ScreenOpener.openPlayerEditor(player);
-        }
-        return InteractionResultHolder.sidedSuccess(player.getItemInHand(hand), level.isClientSide);
+    private static void openFromAir(Player player) {
+        String eggType = spawnEggEntityType(player.getItemInHand(InteractionHand.OFF_HAND));
+        if (eggType != null) ClientHooks.openMobTypeEditor(eggType);
+        else ClientHooks.openPlayerEditor(player);
     }
 
     @Override
-    public InteractionResult interactLivingEntity(ItemStack stack, Player player,
-                                                   LivingEntity target, InteractionHand hand) {
-        if (!canUse(player)) return InteractionResult.PASS;
-        Level level = player.level();
-        if (level.isClientSide) {
-            if (target instanceof Player targetPlayer) {
-
-                ScreenOpener.openPlayerEditor(targetPlayer);
-            } else if (player.isShiftKeyDown()) {
-                ScreenOpener.openRandomizeMob(target);
-            } else {
-                ScreenOpener.openMobEditor(target);
-            }
+    public InteractionResult interactLivingEntity(ItemStack stack, Player player, LivingEntity target, InteractionHand hand) {
+        if (!mayUse(player)) return InteractionResult.PASS;
+        if (player.level().isClientSide()) {
+            if (target instanceof Player targetPlayer) ClientHooks.openPlayerEditor(targetPlayer);
+            else if (player.isShiftKeyDown()) ClientHooks.openRandomizeMob(target);
+            else ClientHooks.openMobEditor(target);
         }
-        return InteractionResult.sidedSuccess(level.isClientSide);
+        return success(player.level());
     }
 
+    //#if MC >= 1.21.5
+    //$ @Override
+    //$ public void appendHoverText(ItemStack stack, TooltipContext ctx, TooltipDisplay display, Consumer<Component> lines, TooltipFlag flag) {
+    //$     if (Platform.getEnvironment() == Env.CLIENT) ClientHooks.appendWandTooltip(lines);
+    //$ }
+    //#else
     @Override
-    public boolean hurtEnemy(ItemStack stack, LivingEntity target, LivingEntity attacker) {
-        if (attacker instanceof Player player && player.level().isClientSide) {
-            String json = JsonUtil.serializeMobStats(target);
-            net.minecraft.client.Minecraft.getInstance().keyboardHandler.setClipboard(json);
-            player.sendSystemMessage(Component.literal("Copied stats to clipboard.")
-                    .withStyle(ChatFormatting.GREEN));
-        }
-        return false;
+    public void appendHoverText(ItemStack stack, TooltipContext ctx, List<Component> lines, TooltipFlag flag) {
+        if (Platform.getEnvironment() == Env.CLIENT) ClientHooks.appendWandTooltip(lines::add);
+    }
+    //#endif
+
+    static InteractionResult success(Level level) {
+        //#if MC >= 1.21.2
+        //$ return InteractionResult.SUCCESS;
+        //#else
+        return InteractionResult.sidedSuccess(level.isClientSide());
+        //#endif
     }
 
-    @Override
-    public void appendHoverText(ItemStack stack, TooltipContext ctx,
-                                 List<Component> lines, TooltipFlag flag) {
-        lines.add(Component.literal("Right-click block         › edit THIS block").withStyle(ChatFormatting.AQUA));
-        lines.add(Component.literal("Shift+right-click block   › edit ALL of that type").withStyle(ChatFormatting.GRAY));
-        lines.add(Component.literal("Right-click mob/NPC       › edit mob stats").withStyle(ChatFormatting.GRAY));
-        lines.add(Component.literal("Shift+right-click mob     › randomize mob stats").withStyle(ChatFormatting.GRAY));
-        lines.add(Component.literal("Right-click player        › edit player stats").withStyle(ChatFormatting.GRAY));
-        lines.add(Component.literal("Offhand spawn egg         › edit that mob type").withStyle(ChatFormatting.GRAY));
-        lines.add(Component.literal("Right-click (air)         › edit your stats").withStyle(ChatFormatting.GRAY));
-        lines.add(Component.literal("Left-click mob            › copy stats JSON").withStyle(ChatFormatting.GRAY));
-
-        try {
-            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
-            if (mc.level == null) return;
-
-            if (mc.crosshairPickEntity instanceof LivingEntity le) {
-                ResourceLocation typeId = EntityType.getKey(le.getType());
-                MobStats ms = StatRegistry.getMob(typeId);
-                lines.add(Component.empty());
-                if (ms != null) {
-                    lines.add(Component.literal("★ " + typeId.getPath() + ": custom stats active")
-                            .withStyle(ChatFormatting.YELLOW));
-                    lines.add(Component.literal("  HP " + ms.maxHealth + "  Dmg " + ms.attackDamage)
-                            .withStyle(ChatFormatting.WHITE));
-                } else {
-                    lines.add(Component.literal("Looking at: " + typeId.getPath())
-                            .withStyle(ChatFormatting.DARK_GRAY));
-                }
-            } else if (mc.hitResult instanceof BlockHitResult bhr) {
-                net.minecraft.core.BlockPos bhp = bhr.getBlockPos();
-                Block block = mc.level.getBlockState(bhp).getBlock();
-                ResourceLocation blockId = BuiltInRegistries.BLOCK.getKey(block);
-
-                String posKey = StatRegistry.makePosKey(mc.level.dimension(), bhp);
-                BlockStats bsPos  = StatRegistry.getBlockAt(posKey);
-                BlockStats bsType = StatRegistry.getBlock(blockId);
-                if (bsPos != null) {
-                    lines.add(Component.empty());
-                    lines.add(Component.literal("★ THIS block: custom stats active")
-                            .withStyle(ChatFormatting.AQUA));
-                    lines.add(Component.literal("  Hardness " + bsPos.hardness + "  Light " + bsPos.lightEmission
-                            + "  Slip " + bsPos.slipperiness).withStyle(ChatFormatting.WHITE));
-                    if (bsType != null)
-                        lines.add(Component.literal("  (type override also active)")
-                                .withStyle(ChatFormatting.DARK_GRAY));
-                } else if (bsType != null) {
-                    lines.add(Component.empty());
-                    lines.add(Component.literal("★ " + blockId.getPath() + ": type stats active")
-                            .withStyle(ChatFormatting.YELLOW));
-                    lines.add(Component.literal("  Hardness " + bsType.hardness + "  Light " + bsType.lightEmission)
-                            .withStyle(ChatFormatting.WHITE));
-                }
-            }
-        } catch (Exception ignored) {}
+    private static boolean mayUse(Player player) {
+        boolean allowed = player instanceof ServerPlayer sp ? Permissions.mayEdit(sp)
+                : player.level().isClientSide() && ClientHooks.mayEdit();
+        if (!allowed && player.level().isClientSide())
+            ClientHooks.actionBar(Component.literal("CraftStats: you need operator permissions to use the Craft Wand.")
+                    .withStyle(ChatFormatting.RED));
+        return allowed;
     }
 
-    private boolean canUse(Player player) {
-        CraftStatsConfig.ConfigData cfg = CraftStatsConfig.get();
-        if (cfg.requireOp && player instanceof ServerPlayer sp) {
-            return sp.hasPermissions(2);
-        }
-        if (player.isCreative()) return true;
-        return cfg.allowSurvival;
-    }
-
-    private static String spawnEggEntityTypeId(ItemStack egg) {
+    /** "minecraft:zombie" for a zombie spawn egg, otherwise null. */
+    private static String spawnEggEntityType(ItemStack egg) {
+        if (egg.isEmpty()) return null;
         ResourceLocation itemKey = BuiltInRegistries.ITEM.getKey(egg.getItem());
         String path = itemKey.getPath();
-        if (path.endsWith("_spawn_egg")) {
-            String entityPath = path.substring(0, path.length() - "_spawn_egg".length());
-            ResourceLocation entityKey = ResourceLocation.fromNamespaceAndPath(
-                    itemKey.getNamespace(), entityPath);
-            if (BuiltInRegistries.ENTITY_TYPE.containsKey(entityKey)) {
-                return entityKey.toString();
-            }
-        }
-        return null;
+        if (!path.endsWith("_spawn_egg")) return null;
+        ResourceLocation entityKey = ResourceLocation.fromNamespaceAndPath(itemKey.getNamespace(),
+                path.substring(0, path.length() - "_spawn_egg".length()));
+        return BuiltInRegistries.ENTITY_TYPE.containsKey(entityKey) ? entityKey.toString() : null;
     }
 }

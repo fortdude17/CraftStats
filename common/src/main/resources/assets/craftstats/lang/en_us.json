@@ -13,11 +13,5 @@
   "craftstats.gui.tab.block": "Block",
   "craftstats.gui.tab.item": "Item",
   "craftstats.gui.tab.player": "Player",
-  "craftstats.preset.vanilla_default": "Vanilla Default",
-  "craftstats.preset.overpowered": "Overpowered",
-  "craftstats.preset.glass_cannon": "Glass Cannon",
-  "craftstats.preset.chaos": "Chaos",
-  "craftstats.randomize.title": "Randomize Preview",
-  "craftstats.propagate.title": "Propagate Changes",
-  "craftstats.propagate.confirm_prompt": "Type CONFIRM to proceed"
+  "craftstats.randomize.title": "Randomize Preview"
 }

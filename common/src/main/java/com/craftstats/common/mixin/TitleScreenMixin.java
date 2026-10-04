@@ -11,18 +11,16 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+/** Emergency "wipe CraftStats data" screen, reachable even if a world won't load. */
 @Mixin(TitleScreen.class)
 public abstract class TitleScreenMixin extends Screen {
     protected TitleScreenMixin(Component title) { super(title); }
 
     @Inject(method = "init", at = @At("TAIL"))
     private void craftstats$addButton(CallbackInfo ci) {
-        int bw = 120, bh = 20;
-
-        addRenderableWidget(Button.builder(
-                Component.literal("CraftStats"),
-                b -> Minecraft.getInstance().setScreen(new StatResetScreen(this)))
-                .bounds(4, this.height - bh - 30, bw, bh)
+        addRenderableWidget(Button.builder(Component.literal("CraftStats Data"),
+                        b -> Minecraft.getInstance().setScreen(new StatResetScreen(this)))
+                .bounds(4, 4, 100, 20)
                 .build());
     }
 }

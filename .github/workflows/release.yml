@@ -1,0 +1,70 @@
+name: Release
+
+# Push a tag like v1.1.2 (matching mod_version in gradle.properties) to build every
+# Minecraft version and publish the jars as a GitHub pre-release. Mark it as a full
+# release on GitHub once it has been tested.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Minecraft ${{ matrix.mc }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        mc: ['1.21.1', '1.21.11']
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check tag matches mod_version
+        run: |
+          version=$(grep '^mod_version=' gradle.properties | cut -d= -f2)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match mod_version=$version"; exit 1
+          fi
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v5
+      - run: |
+          chmod +x gradlew
+          ./gradlew build -Pmc=${{ matrix.mc }}
+          mkdir -p dist
+          for loader in fabric neoforge; do
+            for jar in "$loader"/build/libs/*.jar; do
+              case "$jar" in *-dev*|*-sources*) continue ;; esac
+              cp "$jar" dist/
+            done
+          done
+      - uses: actions/upload-artifact@v5
+        with:
+          name: jars-${{ matrix.mc }}
+          path: dist/*.jar
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: jars-*
+          merge-multiple: true
+          path: dist
+      - name: Release notes from CHANGELOG.md
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '/^## /{p=($2==v); next} p' CHANGELOG.md > notes.md
+          test -s notes.md || echo "See CHANGELOG.md" > notes.md
+          ls -l dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: CraftStats ${{ github.ref_name }}
+          body_path: notes.md
+          files: dist/*.jar
+          prerelease: true

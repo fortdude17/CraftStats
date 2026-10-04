@@ -22,10 +22,12 @@ jobs:
       - name: Dump signatures
         run: |
           MC=$(find . ~/.gradle -name 'minecraft-merged-*1.21.11*.jar' ! -name '*sources*' 2>/dev/null | head -1)
-          ARCH=$(find . ~/.gradle -path '*architectury/19.0.1/architectury-19.0.1.jar' 2>/dev/null | head -1)
+          ARCH=$(find . ~/.gradle -name 'architectury-19*.jar' ! -name '*sources*' ! -name '*fabric*' ! -name '*neoforge*' 2>/dev/null | head -1)
+          find . ~/.gradle -name 'architectury*.jar' 2>/dev/null | head
           echo "MC=$MC ARCH=$ARCH"
           unzip -Z1 "$MC" | grep '\.class$' > mc.txt
-          unzip -Z1 "$ARCH" | grep '\.class$' > arch.txt
+          touch arch.txt
+          [ -n "$ARCH" ] && unzip -Z1 "$ARCH" | grep '\.class$' > arch.txt
           names="GuiGraphics Screen AbstractWidget Button EditBox AbstractSliderButton Tooltip StringWidget SpawnEggItem EntityType Entity LivingEntity Mob PathfinderMob Projectile AbstractArrow ThrowableItemProjectile ThrowableProjectile Snowball AbstractHurtingProjectile Enchantment EnchantmentHelper ItemEnchantments Block BlockBehaviour BlockBehaviour\$BlockStateBase ServerPlayerGameMode ItemEntity ExperienceOrb Level ServerLevel FireBlock FoodData Player ServerPlayer Item ItemStack DataComponents Attributes MobCategory NaturalSpawner LightningBolt GoalSelector MeleeAttackGoal NearestAttackableTargetGoal Wolf SoundType EquipmentSlotGroup ItemAttributeModifiers ItemAttributeModifiers\$Builder Rarity Repairable UseCooldown ThrownItemRenderer EntityRendererProvider DamageSources DamageTypeTags MobEffects Abilities AttributeModifier AttributeInstance GameRules CropBlock ItemCooldowns Minecraft LevelRenderer ParticleTypes Explosion ServerExplosion Inventory EnchantmentEffectComponents TooltipDisplay Tool MobSpawnSettings ServerLevelData LevelData Leashable SoundEvents WindowTooltipHolder WidgetTooltipHolder CycleButton FallingBlockEntity ExperienceOrb Commands EntitySpawnReason MobSpawnType Unit Consumable FoodProperties DyedItemColor Weapon ProjectileUtil ServerPlayer\$RespawnReason"
           for n in $names; do
             for c in $(grep -E "/${n//\$/\\\$}\.class$" mc.txt | head -3); do

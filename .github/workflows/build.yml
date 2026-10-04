@@ -48,6 +48,23 @@ jobs:
           done
           exit $failed
 
+      - name: Client smoke test (start the game under a virtual display)
+        run: |
+          sudo apt-get install -y -qq xvfb libgl1-mesa-dri > /dev/null
+          failed=0
+          for loader in fabric neoforge; do
+            timeout 900 xvfb-run -a -s "-screen 0 1280x720x24" ./gradlew ":$loader:runClient" -Pmc=${{ matrix.mc }} -PsmokeTest --console=plain > "client-$loader.log" 2>&1 || true
+            grep -E "smoke test:|CRAFTSTATS-CLIENT-SMOKE|Mixin apply|InvalidInjection|MixinApplyError|Exception|Crash" "client-$loader.log" | head -60 || true
+            if grep -q "CRAFTSTATS-CLIENT-SMOKE-PASS" "client-$loader.log"; then
+              echo "$loader client smoke test passed"
+            else
+              echo "::error::$loader client smoke test failed on ${{ matrix.mc }}"
+              tail -150 "client-$loader.log"
+              failed=1
+            fi
+          done
+          exit $failed
+
       - name: Collect jars
         run: |
           mkdir -p dist

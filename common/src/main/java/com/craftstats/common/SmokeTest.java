@@ -34,6 +34,8 @@ public final class SmokeTest {
         List<String> failures = new ArrayList<>();
         step(failures, "mixin audit", () -> MixinEnvironment.getCurrentEnvironment().audit());
 
+        step(failures, "editor field definitions", SmokeTest::checkFieldDefinitions);
+
         step(failures, "item overrides", () -> {
             ItemStats bread = new ItemStats();
             bread.stackSize = 16;
@@ -124,9 +126,27 @@ public final class SmokeTest {
         exit.start();
     }
 
-    private interface Check { void run() throws Exception; }
+    /** Every GUI field must exist on its stats class with a type the field row can edit. */
+    static void checkFieldDefinitions() throws NoSuchFieldException {
+        for (TargetType type : TargetType.values()) {
+            for (var tab : com.craftstats.common.gui.panel.StatFields.tabs(type)) {
+                for (var def : tab.fields()) {
+                    Class<?> t = StatSchema.classFor(type).getField(def.fieldName()).getType();
+                    boolean ok = switch (def.type()) {
+                        case NUMBER -> t == int.class || t == double.class || t == float.class || t == long.class
+                                || Number.class.isAssignableFrom(t);
+                        case TOGGLE -> t == boolean.class;
+                        case PILL, TEXT -> t == String.class;
+                    };
+                    check(ok, type + "." + def.fieldName() + " has type " + t.getSimpleName() + " but is a " + def.type());
+                }
+            }
+        }
+    }
 
-    private static void step(List<String> failures, String name, Check check) {
+    interface Check { void run() throws Exception; }
+
+    static void step(List<String> failures, String name, Check check) {
         try {
             check.run();
             CraftStats.LOGGER.info("smoke test: {} ok", name);
@@ -136,7 +156,7 @@ public final class SmokeTest {
         }
     }
 
-    private static void check(boolean condition, String message) {
+    static void check(boolean condition, String message) {
         if (!condition) throw new AssertionError(message);
     }
 

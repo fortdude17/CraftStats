@@ -30,6 +30,23 @@ jobs:
           chmod +x gradlew
           ./gradlew build -Pmc=${{ matrix.mc }} --stacktrace
 
+      - name: Collect jars
+        run: |
+          mkdir -p dist
+          for loader in fabric neoforge; do
+            for jar in "$loader"/build/libs/*.jar; do
+              case "$jar" in *-dev*|*-sources*) continue ;; esac
+              cp "$jar" dist/
+            done
+          done
+          ls -l dist
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: craftstats-mc${{ matrix.mc }}
+          path: dist/*.jar
+          if-no-files-found: error
+
       - name: Smoke test (boot a dedicated server on each loader)
         run: |
           failed=0
@@ -54,7 +71,7 @@ jobs:
           sudo apt-get install -y -qq xvfb libgl1-mesa-dri > /dev/null
           failed=0
           for loader in fabric neoforge; do
-            timeout 900 xvfb-run -a -s "-screen 0 1280x720x24" ./gradlew ":$loader:runClient" -Pmc=${{ matrix.mc }} -PsmokeTest --console=plain > "client-$loader.log" 2>&1 || true
+            timeout 600 xvfb-run -a -s "-screen 0 1280x720x24" ./gradlew ":$loader:runClient" -Pmc=${{ matrix.mc }} -PsmokeTest --console=plain > "client-$loader.log" 2>&1 || true
             grep -E "smoke test:|CRAFTSTATS-CLIENT-SMOKE|Mixin apply|InvalidInjection|MixinApplyError|Exception|Crash" "client-$loader.log" | head -60 || true
             if grep -q "CRAFTSTATS-CLIENT-SMOKE-PASS" "client-$loader.log"; then
               echo "$loader client smoke test passed"
@@ -65,20 +82,3 @@ jobs:
             fi
           done
           exit $failed
-
-      - name: Collect jars
-        run: |
-          mkdir -p dist
-          for loader in fabric neoforge; do
-            for jar in "$loader"/build/libs/*.jar; do
-              case "$jar" in *-dev*|*-sources*) continue ;; esac
-              cp "$jar" dist/
-            done
-          done
-          ls -l dist
-
-      - uses: actions/upload-artifact@v5
-        with:
-          name: craftstats-mc${{ matrix.mc }}
-          path: dist/*.jar
-          if-no-files-found: error

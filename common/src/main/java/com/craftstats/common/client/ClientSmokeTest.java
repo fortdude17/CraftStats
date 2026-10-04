@@ -8,7 +8,6 @@ import com.craftstats.common.stats.TargetType;
 import com.craftstats.common.stats.VanillaStats;
 import dev.architectury.event.events.client.ClientTickEvent;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.world.entity.EntityType;
 import org.spongepowered.asm.mixin.MixinEnvironment;
 
@@ -25,6 +24,7 @@ public final class ClientSmokeTest {
 
     private static final List<String> FAILURES = new ArrayList<>();
     private static int ticks;
+    private static int waited;
     private static boolean started;
 
     private ClientSmokeTest() {}
@@ -36,8 +36,15 @@ public final class ClientSmokeTest {
 
     private static void tick(Minecraft mc) {
         if (!started) {
-            // Wait until the game has finished loading and shows the title screen.
-            if (!(mc.screen instanceof TitleScreen)) return;
+            // Wait until loading has finished and a screen is up. A fresh game shows the
+            // accessibility onboarding screen instead of the title screen, so accept any.
+            if (mc.getOverlay() != null || mc.screen == null) {
+                if (++waited == 6000) {
+                    CraftStats.LOGGER.error("CRAFTSTATS-CLIENT-SMOKE-FAIL: game never finished loading");
+                    mc.stop();
+                }
+                return;
+            }
             started = true;
         }
         ticks++;

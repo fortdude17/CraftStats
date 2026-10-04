@@ -2,6 +2,7 @@ name: Build
 
 on:
   push:
+    paths-ignore: ['.github/research/**', '.github/workflows/research.yml', '**.md']
   pull_request:
   workflow_dispatch:
 

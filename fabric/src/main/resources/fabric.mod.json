@@ -1,35 +1,34 @@
 {
   "schemaVersion": 1,
   "id": "craftstats",
-  "version": "1.0.0",
+  "version": "${version}",
   "name": "CraftStats!",
   "description": "Universal in-game stats editor for mobs, blocks, items and players.",
   "authors": ["Fortdude21"],
   "contact": {
-    "homepage": "https://github.com/lhaze/craftstats",
-    "issues": "https://github.com/lhaze/craftstats/issues"
+    "homepage": "https://github.com/fortdude17/CraftStats",
+    "sources": "https://github.com/fortdude17/CraftStats",
+    "issues": "https://github.com/fortdude17/CraftStats/issues"
   },
   "license": "MIT",
   "icon": "assets/craftstats/icon.png",
   "environment": "*",
   "entrypoints": {
     "main": ["com.craftstats.fabric.CraftStatsFabric"],
-    "client": ["com.craftstats.fabric.CraftStatsClientFabric"]
+    "client": ["com.craftstats.fabric.CraftStatsClientFabric"],
+    "modmenu": ["com.craftstats.fabric.config.CraftStatsModMenuConfig"]
   },
   "mixins": [
-    "craftstats-common.mixins.json",
-    "craftstats-fabric.mixins.json"
+    "craftstats-common.mixins.json"
   ],
-  "dependencies": {
-    "fabricloader": ">=0.16.0",
+  "depends": {
+    "fabricloader": ">=${fabric_loader_version}",
     "fabric-api": "*",
-    "architectury": ">=13.0.0",
-    "minecraft": "~1.21.1",
+    "architectury": ">=${architectury_version}",
+    "minecraft": "${fabric_minecraft_range}",
     "java": ">=21"
   },
-  "custom": {
-    "modmenu": {
-      "config_factory": "com.craftstats.fabric.config.CraftStatsModMenuConfig"
-    }
+  "suggests": {
+    "modmenu": "*"
   }
 }

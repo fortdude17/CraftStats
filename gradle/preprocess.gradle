@@ -1,0 +1,109 @@
+// Minimal source preprocessor so one codebase can target several Minecraft versions.
+//
+// The checked-in sources are always valid for the *base* version (see `base_mc` in
+// gradle.properties), so IDEs work normally. When building another version, the sources
+// are copied to build/preprocessed/ and rewritten:
+//
+//   //#if MC >= 1.21.11
+//   //$ Identifier id = Identifier.parse(s);     <- enabled for 1.21.11+
+//   //#else
+//   ResourceLocation id = ResourceLocation.parse(s); <- commented out for 1.21.11+
+//   //#endif
+//
+// Supported operators: >=, >, <=, <, ==, !=. Blocks may nest and may use //#elseif.
+// Lines keep their positions, so compiler errors point at the right source line.
+// Per-version token renames (e.g. ResourceLocation -> Identifier) live in
+// versions/<mc>.properties as `rename.<Old>=<New>`.
+
+static int[] parseVersion(String v) {
+    v.trim().split('\\.').collect { it as int } as int[]
+}
+
+static int compareVersions(String a, String b) {
+    int[] x = parseVersion(a), y = parseVersion(b)
+    for (int i = 0; i < Math.max(x.length, y.length); i++) {
+        int p = i < x.length ? x[i] : 0
+        int q = i < y.length ? y[i] : 0
+        if (p != q) return p <=> q
+    }
+    return 0
+}
+
+static boolean evalCondition(String cond, String mc, String file, int line) {
+    def m = cond.trim() =~ /^MC\s*(>=|<=|==|!=|>|<)\s*([0-9.]+)$/
+    if (!m.matches()) throw new GradleException("$file:$line: bad preprocessor condition '$cond'")
+    int c = compareVersions(mc, m.group(2))
+    switch (m.group(1)) {
+        case '>=': return c >= 0
+        case '>':  return c > 0
+        case '<=': return c <= 0
+        case '<':  return c < 0
+        case '==': return c == 0
+        default:   return c != 0
+    }
+}
+
+static String preprocessSource(String text, String mc, Map<String, String> renames, String file) {
+    def out = new StringBuilder()
+    // Each frame: [parentActive, thisBranchActive, anyBranchTaken]
+    def stack = []
+    boolean active = true
+    int lineNo = 0
+    String nl = text.contains('\r\n') ? '\r\n' : '\n'
+    for (String line : text.split('\r?\n', -1)) {
+        lineNo++
+        String t = line.trim()
+        if (t.startsWith('//#')) {
+            def m = t =~ /^\/\/#(if|elseif|else|endif)\b\s*(.*)$/
+            if (!m.matches()) throw new GradleException("$file:$lineNo: unknown directive '$t'")
+            switch (m.group(1)) {
+                case 'if':
+                    boolean c = evalCondition(m.group(2), mc, file, lineNo)
+                    stack.push([active, c, c])
+                    active = active && c
+                    break
+                case 'elseif':
+                    if (stack.isEmpty()) throw new GradleException("$file:$lineNo: //#elseif without //#if")
+                    def f = stack.pop()
+                    boolean c = !f[2] && evalCondition(m.group(2), mc, file, lineNo)
+                    stack.push([f[0], c, f[2] || c])
+                    active = f[0] && c
+                    break
+                case 'else':
+                    if (stack.isEmpty()) throw new GradleException("$file:$lineNo: //#else without //#if")
+                    def f = stack.pop()
+                    stack.push([f[0], !f[2], true])
+                    active = f[0] && !f[2]
+                    break
+                case 'endif':
+                    if (stack.isEmpty()) throw new GradleException("$file:$lineNo: //#endif without //#if")
+                    active = stack.pop()[0]
+                    break
+            }
+            out.append(line).append(nl)
+            continue
+        }
+        String result = line
+        if (!stack.isEmpty()) {
+            def dm = line =~ /^(\s*)\/\/\$ ?(.*)$/
+            if (active && dm.matches()) {
+                result = dm.group(1) + dm.group(2)
+            } else if (!active && !dm.matches() && !t.isEmpty()) {
+                def im = line =~ /^(\s*)(.*)$/
+                im.matches()
+                result = im.group(1) + '//$ ' + im.group(2)
+            }
+        }
+        if (active) {
+            renames.each { from, to -> result = result.replaceAll("\\b${java.util.regex.Pattern.quote(from)}\\b", java.util.regex.Matcher.quoteReplacement(to)) }
+        }
+        out.append(result).append(nl)
+    }
+    if (!stack.isEmpty()) throw new GradleException("$file: unterminated //#if")
+    // split(-1) keeps a trailing empty element; drop the extra newline it produces.
+    out.setLength(out.length() - nl.length())
+    return out.toString()
+}
+
+ext.preprocessSource = this.&preprocessSource
+ext.compareVersions = this.&compareVersions

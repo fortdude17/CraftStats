@@ -54,7 +54,9 @@ public final class CraftStats {
         });
         LifecycleEvent.SERVER_STARTED.register(server -> {
             StatApplier.refreshMobs(server, null);
-            if (SmokeTest.enabled()) SmokeTest.run(server);
+            // Only on a dedicated server: the client test plays in a singleplayer world
+            // whose integrated server runs in the same JVM (and must not be shut down).
+            if (SmokeTest.enabled() && server.isDedicatedServer()) SmokeTest.run(server);
         });
         LifecycleEvent.SERVER_STOPPING.register(server -> StatPersistence.save());
         LifecycleEvent.SERVER_STOPPED.register(server -> {

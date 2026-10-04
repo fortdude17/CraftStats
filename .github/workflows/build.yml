@@ -68,11 +68,30 @@ jobs:
 
       - name: Client smoke test (start the game under a virtual display)
         run: |
-          sudo apt-get install -y -qq xvfb libgl1-mesa-dri > /dev/null
+          sudo apt-get install -y -qq xvfb libgl1-mesa-dri imagemagick > /dev/null
           failed=0
+          mkdir -p shots
           for loader in fabric neoforge; do
-            timeout 600 xvfb-run -a -s "-screen 0 1280x720x24" ./gradlew ":$loader:runClient" -Pmc=${{ matrix.mc }} -PsmokeTest --console=plain > "client-$loader.log" 2>&1 || true
-            grep -E "smoke test:|CRAFTSTATS-CLIENT-SMOKE|Mixin apply|InvalidInjection|MixinApplyError|Exception|Crash" "client-$loader.log" | head -60 || true
+            mkdir -p "$loader/run"
+            Xvfb :99 -screen 0 854x480x24 > /dev/null 2>&1 &
+            xvfb=$!
+            export DISPLAY=:99
+            shots=""
+            [ "$loader" = fabric ] && shots="-Pscreenshots"
+            timeout 600 ./gradlew ":$loader:runClient" -Pmc=${{ matrix.mc }} -PsmokeTest $shots --console=plain > "client-$loader.log" 2>&1 &
+            game=$!
+            # The test creates screenshot-<name>.req files and waits until they are gone.
+            while kill -0 $game 2>/dev/null; do
+              for req in $(find fabric/run neoforge/run -maxdepth 1 -name 'screenshot-*.req' 2>/dev/null); do
+                sleep 1
+                name=$(basename "$req" .req)
+                import -display :99 -window root "shots/${name#screenshot-}.png" 2>/dev/null || true
+                rm -f "$req"
+              done
+              sleep 1
+            done
+            kill $xvfb 2>/dev/null || true
+            grep -E "smoke test:|CRAFTSTATS-CLIENT-SMOKE|Mixin apply|InvalidInjection|MixinApplyError|Exception|Crash" "client-$loader.log" | head -80 || true
             if grep -q "CRAFTSTATS-CLIENT-SMOKE-PASS" "client-$loader.log"; then
               echo "$loader client smoke test passed"
             else
@@ -80,5 +99,14 @@ jobs:
               tail -150 "client-$loader.log"
               failed=1
             fi
+          done
+          # Screenshots go into the log as base64 so they can be looked at without artifacts.
+          for f in shots/*.png; do
+            [ -e "$f" ] || continue
+            convert "$f" -quality 85 "${f%.png}.jpg"
+            echo "SCREENSHOT-BEGIN $(basename "${f%.png}")"
+            base64 -w 0 "${f%.png}.jpg"
+            echo
+            echo "SCREENSHOT-END"
           done
           exit $failed

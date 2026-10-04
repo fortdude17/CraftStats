@@ -63,6 +63,9 @@ public final class StatPersistence {
         root.add("players",         write(StatRegistry.allPlayers()));
         root.add("mob_instances",   write(StatRegistry.allMobInstances()));
         root.add("block_positions", write(StatRegistry.allBlockPositions()));
+        root.add("projectiles",     write(StatRegistry.allProjectiles()));
+        root.add("enchantments",    write(StatRegistry.allEnchantments()));
+        if (StatRegistry.world() != null) root.add("world", StatSchema.GSON_COMPACT.toJsonTree(StatRegistry.world()));
         return root;
     }
 
@@ -75,6 +78,15 @@ public final class StatPersistence {
         read(root, "players",         TargetType.PLAYER, UUID::fromString,        StatRegistry::setPlayer);
         read(root, "mob_instances",   TargetType.MOB,    UUID::fromString,        StatRegistry::setMobInstance);
         read(root, "block_positions", TargetType.BLOCK,  Function.identity(),     StatRegistry::setBlockAt);
+        read(root, "projectiles",     TargetType.PROJECTILE,  ResourceLocation::parse, StatRegistry::setProjectile);
+        read(root, "enchantments",    TargetType.ENCHANTMENT, ResourceLocation::parse, StatRegistry::setEnchantment);
+        if (root.has("world") && root.get("world").isJsonObject()) {
+            try {
+                StatRegistry.setWorld(StatSchema.parse(TargetType.WORLD, root.get("world")));
+            } catch (Exception ex) {
+                CraftStats.LOGGER.warn("CraftStats: skipping invalid world settings: {}", ex.toString());
+            }
+        }
     }
 
     private static JsonObject write(Map<?, ?> map) {
@@ -103,10 +115,13 @@ public final class StatPersistence {
         if (file == null || !Files.exists(file)) return;
         try {
             restore(JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8)).getAsJsonObject());
-            CraftStats.LOGGER.info("CraftStats: loaded {} mob, {} block, {} item, {} player, {} mob-instance and {} block-position override(s).",
+            CraftStats.LOGGER.info("CraftStats: loaded {} mob, {} block, {} item, {} player, {} projectile, {} enchantment, "
+                            + "{} mob-instance and {} block-position override(s){}.",
                     StatRegistry.allMobs().size(), StatRegistry.allBlocks().size(),
                     StatRegistry.allItems().size(), StatRegistry.allPlayers().size(),
-                    StatRegistry.allMobInstances().size(), StatRegistry.allBlockPositions().size());
+                    StatRegistry.allProjectiles().size(), StatRegistry.allEnchantments().size(),
+                    StatRegistry.allMobInstances().size(), StatRegistry.allBlockPositions().size(),
+                    StatRegistry.world() != null ? " and world settings" : "");
         } catch (Exception e) {
             // Keep the unreadable file so the user doesn't lose it on the next save.
             Path backup = file.resolveSibling("stats.json.broken-" + System.currentTimeMillis());

@@ -7,7 +7,6 @@ import com.craftstats.common.preset.Preset;
 import com.craftstats.common.preset.PresetManager;
 import com.craftstats.common.randomize.RandomizeManager;
 import com.craftstats.common.stats.*;
-import com.craftstats.common.util.Compat;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
@@ -16,13 +15,9 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.EntityArgument;
-import net.minecraft.core.Registry;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.Arrays;
@@ -33,18 +28,22 @@ import java.util.function.Predicate;
 public final class CraftStatsCommands {
 
     private static final SuggestionProvider<CommandSourceStack> EDITABLE_TYPES = (ctx, b) ->
-            SharedSuggestionProvider.suggest(new String[]{"mob", "block", "item"}, b);
+            SharedSuggestionProvider.suggest(Arrays.stream(TargetType.values())
+                    .filter(t -> t != TargetType.PLAYER && RandomizeManager.supports(t)).map(TargetType::id), b);
     private static final SuggestionProvider<CommandSourceStack> ALL_TYPES = (ctx, b) ->
-            SharedSuggestionProvider.suggest(new String[]{"mob", "block", "item", "player"}, b);
+            SharedSuggestionProvider.suggest(Arrays.stream(TargetType.values()).map(TargetType::id), b);
 
     private static final SuggestionProvider<CommandSourceStack> TARGET_IDS = (ctx, b) -> {
-        String type = StringArgumentType.getString(ctx, "type").toLowerCase(Locale.ROOT);
+        TargetType type;
+        try {
+            type = TargetType.valueOf(StringArgumentType.getString(ctx, "type").toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            return b.buildFuture();
+        }
         return switch (type) {
-            case "mob"    -> SharedSuggestionProvider.suggest(BuiltInRegistries.ENTITY_TYPE.keySet().stream().map(Object::toString), b);
-            case "block"  -> SharedSuggestionProvider.suggest(BuiltInRegistries.BLOCK.keySet().stream().map(Object::toString), b);
-            case "item"   -> SharedSuggestionProvider.suggest(BuiltInRegistries.ITEM.keySet().stream().map(Object::toString), b);
-            case "player" -> SharedSuggestionProvider.suggest(ctx.getSource().getOnlinePlayerNames(), b);
-            default -> b.buildFuture();
+            case PLAYER -> SharedSuggestionProvider.suggest(ctx.getSource().getOnlinePlayerNames(), b);
+            case WORLD  -> SharedSuggestionProvider.suggest(new String[]{TargetType.WORLD_KEY}, b);
+            default     -> SharedSuggestionProvider.suggest(StatTargets.ids(ctx.getSource().registryAccess(), type), b);
         };
     };
 
@@ -92,6 +91,7 @@ public final class CraftStatsCommands {
                                     return 1;
                                 }))
                         .then(Commands.argument("type", StringArgumentType.word()).suggests(ALL_TYPES)
+                                .executes(CraftStatsCommands::reset) // "reset world"
                                 .then(Commands.argument("id", StringArgumentType.greedyString()).suggests(TARGET_IDS)
                                         .executes(CraftStatsCommands::reset))))
 
@@ -99,6 +99,7 @@ public final class CraftStatsCommands {
                         .then(Commands.literal("load")
                                 .then(Commands.argument("name", StringArgumentType.string()).suggests(PRESET_NAMES)
                                         .then(Commands.argument("type", StringArgumentType.word()).suggests(ALL_TYPES)
+                                                .executes(CraftStatsCommands::loadPreset) // "... world"
                                                 .then(Commands.argument("id", StringArgumentType.greedyString()).suggests(TARGET_IDS)
                                                         .executes(CraftStatsCommands::loadPreset))))))
 
@@ -110,36 +111,27 @@ public final class CraftStatsCommands {
         );
     }
 
+    /** Resolves the id argument to a storage key: registry ids, player names, or "world". */
+    private static String resolveKey(CommandSourceStack src, TargetType type, String raw) {
+        if (type == TargetType.PLAYER) {
+            ServerPlayer p = src.getServer().getPlayerList().getPlayerByName(raw);
+            if (p == null) { src.sendFailure(Component.literal("No online player named " + raw)); return null; }
+            return p.getUUID().toString();
+        }
+        String key = StatTargets.validate(src.getServer().registryAccess(), type, raw);
+        if (key == null) src.sendFailure(Component.literal("Unknown " + type.displayName().toLowerCase() + " id '" + raw + "'."));
+        return key;
+    }
+
     private static int reset(CommandContext<CommandSourceStack> ctx) {
         CommandSourceStack src = ctx.getSource();
         MinecraftServer server = src.getServer();
-        String id = StringArgumentType.getString(ctx, "id").trim();
+        String id = idArg(ctx);
         TargetType type = parseType(src, StringArgumentType.getString(ctx, "type"));
         if (type == null) return 0;
-        switch (type) {
-            case MOB -> {
-                ResourceLocation rl = parseId(src, BuiltInRegistries.ENTITY_TYPE, id);
-                if (rl == null) return 0;
-                StatRegistry.removeMob(rl);
-                StatApplier.refreshMobs(server, rl);
-            }
-            case BLOCK -> {
-                ResourceLocation rl = parseId(src, BuiltInRegistries.BLOCK, id);
-                if (rl == null) return 0;
-                StatRegistry.removeBlock(rl);
-            }
-            case ITEM -> {
-                ResourceLocation rl = parseId(src, BuiltInRegistries.ITEM, id);
-                if (rl == null) return 0;
-                StatRegistry.removeItem(rl);
-            }
-            case PLAYER -> {
-                ServerPlayer p = server.getPlayerList().getPlayerByName(id);
-                if (p == null) { src.sendFailure(Component.literal("No online player named " + id)); return 0; }
-                StatRegistry.removePlayer(p.getUUID());
-                StatApplier.applyPlayer(p);
-            }
-        }
+        String key = resolveKey(src, type, id);
+        if (key == null) return 0;
+        StatTargets.remove(server, type, key);
         CraftStatsNetwork.changed(server);
         src.sendSuccess(() -> Component.literal("Reset " + type.displayName().toLowerCase() + " " + id + " to vanilla."), true);
         return 1;
@@ -153,7 +145,7 @@ public final class CraftStatsCommands {
         }
         MinecraftServer server = src.getServer();
         String name = StringArgumentType.getString(ctx, "name");
-        String id = StringArgumentType.getString(ctx, "id").trim();
+        String id = idArg(ctx);
         TargetType type = parseType(src, StringArgumentType.getString(ctx, "type"));
         if (type == null) return 0;
         Optional<Preset> preset = PresetManager.getForType(type).stream().filter(p -> p.name.equals(name)).findFirst();
@@ -161,31 +153,11 @@ public final class CraftStatsCommands {
             src.sendFailure(Component.literal("No " + type.displayName().toLowerCase() + " preset named '" + name + "'."));
             return 0;
         }
+        String key = resolveKey(src, type, id);
+        if (key == null) return 0;
         Object stats = preset.get().copyStats();
-        switch (type) {
-            case MOB -> {
-                ResourceLocation rl = parseId(src, BuiltInRegistries.ENTITY_TYPE, id);
-                if (rl == null) return 0;
-                StatRegistry.setMob(rl, (MobStats) stats);
-                StatApplier.refreshMobs(server, rl);
-            }
-            case BLOCK -> {
-                ResourceLocation rl = parseId(src, BuiltInRegistries.BLOCK, id);
-                if (rl == null) return 0;
-                StatRegistry.setBlock(rl, (BlockStats) stats);
-            }
-            case ITEM -> {
-                ResourceLocation rl = parseId(src, BuiltInRegistries.ITEM, id);
-                if (rl == null) return 0;
-                StatRegistry.setItem(rl, (ItemStats) stats);
-            }
-            case PLAYER -> {
-                ServerPlayer p = server.getPlayerList().getPlayerByName(id);
-                if (p == null) { src.sendFailure(Component.literal("No online player named " + id)); return 0; }
-                StatRegistry.setPlayer(p.getUUID(), (PlayerStats) stats);
-                StatApplier.applyPlayer(p);
-            }
-        }
+        StatAccess.sanitize(type, stats);
+        StatTargets.put(server, type, key, stats);
         CraftStatsNetwork.changed(server);
         src.sendSuccess(() -> Component.literal("Applied preset '" + name + "' to " + id + "."), true);
         return 1;
@@ -209,33 +181,28 @@ public final class CraftStatsCommands {
         MinecraftServer server = src.getServer();
         TargetType type = parseType(src, StringArgumentType.getString(ctx, "type"));
         if (type == null) return 0;
-        switch (type) {
-            case MOB -> {
-                ResourceLocation rl = parseId(src, BuiltInRegistries.ENTITY_TYPE, id);
-                if (rl == null) return 0;
-                EntityType<?> entityType = Compat.registryValue(BuiltInRegistries.ENTITY_TYPE, rl);
-                StatRegistry.setMob(rl, RandomizeManager.randomizeMob(VanillaStats.mob(entityType), seed));
-                StatApplier.refreshMobs(server, rl);
-            }
-            case BLOCK -> {
-                ResourceLocation rl = parseId(src, BuiltInRegistries.BLOCK, id);
-                if (rl == null) return 0;
-                StatRegistry.setBlock(rl, RandomizeManager.randomizeBlock(VanillaStats.block(Compat.registryValue(BuiltInRegistries.BLOCK, rl)), seed));
-            }
-            case ITEM -> {
-                ResourceLocation rl = parseId(src, BuiltInRegistries.ITEM, id);
-                if (rl == null) return 0;
-                StatRegistry.setItem(rl, RandomizeManager.randomizeItem(VanillaStats.item(Compat.registryValue(BuiltInRegistries.ITEM, rl)), seed));
-            }
-            case PLAYER -> {
-                src.sendFailure(Component.literal("Use the player editor to randomize players."));
-                return 0;
-            }
+        if (type == TargetType.PLAYER || !RandomizeManager.supports(type)) {
+            src.sendFailure(Component.literal(type == TargetType.PLAYER ? "Use the player editor to randomize players."
+                    : type.plural() + " can't be randomized."));
+            return 0;
         }
+        String key = resolveKey(src, type, id);
+        if (key == null) return 0;
+        Object vanilla = StatTargets.vanilla(server.registryAccess(), type, key);
+        StatTargets.put(server, type, key, RandomizeManager.randomize(type, vanilla, seed));
         CraftStatsNetwork.changed(server);
         src.sendSuccess(() -> Component.literal("Randomized " + id + " (" + RandomizeManager.getIntensity().name().toLowerCase()
                 + ", seed " + seed + ")."), true);
         return 1;
+    }
+
+    /** The optional id argument; only the world type may leave it out. */
+    private static String idArg(CommandContext<CommandSourceStack> ctx) {
+        try {
+            return StringArgumentType.getString(ctx, "id").trim();
+        } catch (IllegalArgumentException e) {
+            return TargetType.WORLD_KEY;
+        }
     }
 
     private static TargetType parseType(CommandSourceStack src, String raw) {
@@ -246,14 +213,5 @@ public final class CraftStatsCommands {
                     + String.join(", ", Arrays.stream(TargetType.values()).map(t -> t.name().toLowerCase()).toList())));
             return null;
         }
-    }
-
-    private static <T> ResourceLocation parseId(CommandSourceStack src, Registry<T> registry, String raw) {
-        ResourceLocation rl = ResourceLocation.tryParse(raw);
-        if (rl == null || !registry.containsKey(rl)) {
-            src.sendFailure(Component.literal("Unknown id '" + raw + "'."));
-            return null;
-        }
-        return rl;
     }
 }

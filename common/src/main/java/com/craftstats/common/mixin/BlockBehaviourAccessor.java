@@ -15,4 +15,10 @@ public interface BlockBehaviourAccessor {
 
     @Accessor("explosionResistance")
     float craftstats$getExplosionResistance();
+
+    @Accessor("speedFactor")
+    float craftstats$getSpeedFactor();
+
+    @Accessor("jumpFactor")
+    float craftstats$getJumpFactor();
 }

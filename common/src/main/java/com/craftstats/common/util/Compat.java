@@ -1,6 +1,11 @@
 package com.craftstats.common.util;
 
 import net.minecraft.core.Holder;
+import net.minecraft.core.Registry;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -50,6 +55,31 @@ public final class Compat {
         //$ return registry.getValue(id);
         //#else
         return registry.get(id);
+        //#endif
+    }
+
+    public static ResourceLocation keyId(ResourceKey<?> key) {
+        //#if MC >= 1.21.11
+        //$ return key.identifier();
+        //#else
+        return key.location();
+        //#endif
+    }
+
+    public static Registry<Enchantment> enchantments(RegistryAccess access) {
+        //#if MC >= 1.21.2
+        //$ return access.lookupOrThrow(Registries.ENCHANTMENT);
+        //#else
+        return access.registryOrThrow(Registries.ENCHANTMENT);
+        //#endif
+    }
+
+    /** A new entity that has not been added to the level yet (null if the type can't be created). */
+    public static Entity createEntity(net.minecraft.world.entity.EntityType<?> type, Level level) {
+        //#if MC >= 1.21.2
+        //$ return type.create(level, net.minecraft.world.entity.EntitySpawnReason.TRIGGERED);
+        //#else
+        return type.create(level);
         //#endif
     }
 

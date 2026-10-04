@@ -1,10 +1,9 @@
 package com.craftstats.common.client;
 
 import com.craftstats.common.CraftStats;
-import com.craftstats.common.gui.BlockPosScreen;
 import com.craftstats.common.gui.CraftStatsScreen;
-import com.craftstats.common.gui.PlayerStatsScreen;
 import com.craftstats.common.gui.RandomizeScreen;
+import com.craftstats.common.gui.editor.TargetEntries;
 import com.craftstats.common.item.ModItems;
 import com.craftstats.common.network.CraftStatsNetwork;
 import com.craftstats.common.stats.*;
@@ -61,17 +60,18 @@ public final class ClientHooks {
 
     public static void onDisconnect() {
         if (!isLocalHost()) StatRegistry.clear();
+        TargetEntries.invalidate();
     }
 
     // ---- opening screens ---------------------------------------------------------------------
 
     public static void openBlockEditor(Block block) {
-        Minecraft.getInstance().setScreen(new CraftStatsScreen(block));
+        Minecraft.getInstance().setScreen(new CraftStatsScreen(TargetType.BLOCK, BuiltInRegistries.BLOCK.getKey(block).toString()));
     }
 
     public static void openBlockEditorAt(Level level, BlockPos pos) {
         Block block = level.getBlockState(pos).getBlock();
-        Minecraft.getInstance().setScreen(new BlockPosScreen(StatRegistry.makePosKey(level.dimension(), pos), block, pos));
+        Minecraft.getInstance().setScreen(new CraftStatsScreen(StatRegistry.makePosKey(level.dimension(), pos), block, pos));
     }
 
     public static void openMobEditor(LivingEntity entity) {
@@ -83,7 +83,7 @@ public final class ClientHooks {
     }
 
     public static void openPlayerEditor(Player player) {
-        Minecraft.getInstance().setScreen(new PlayerStatsScreen(player.getUUID(), player.getName().getString()));
+        Minecraft.getInstance().setScreen(new CraftStatsScreen(TargetType.PLAYER, player.getUUID().toString()));
     }
 
     public static void openRandomizeMob(LivingEntity entity) {
@@ -92,9 +92,9 @@ public final class ClientHooks {
             return;
         }
         String id = EntityType.getKey(entity.getType()).toString();
-        MobStats current = StatRegistry.getMob(EntityType.getKey(entity.getType()));
-        Minecraft.getInstance().setScreen(new RandomizeScreen(TargetType.MOB, id,
-                current != null ? current.copy() : VanillaStats.mob(entity.getType())));
+        CraftStatsScreen editor = new CraftStatsScreen(TargetType.MOB, id);
+        Minecraft.getInstance().setScreen(new RandomizeScreen(editor, TargetType.MOB, entity.getType().getDescription().getString(),
+                VanillaStats.mob(entity.getType()), editor::loadStats));
     }
 
     // ---- Craft Wand left-click: copy stats ---------------------------------------------------

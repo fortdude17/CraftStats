@@ -55,7 +55,21 @@ public final class CraftStatsNetwork {
     /** What a request targets. */
     public enum Kind {
         MOB(TargetType.MOB), MOB_INSTANCE(TargetType.MOB), BLOCK(TargetType.BLOCK), BLOCK_POS(TargetType.BLOCK),
-        ITEM(TargetType.ITEM), PLAYER(TargetType.PLAYER);
+        ITEM(TargetType.ITEM), PLAYER(TargetType.PLAYER), PROJECTILE(TargetType.PROJECTILE),
+        ENCHANTMENT(TargetType.ENCHANTMENT), WORLD(TargetType.WORLD);
+
+        /** The kind used for a whole target type (not a single mob or block position). */
+        public static Kind of(TargetType type) {
+            return switch (type) {
+                case MOB -> MOB;
+                case BLOCK -> BLOCK;
+                case ITEM -> ITEM;
+                case PLAYER -> PLAYER;
+                case PROJECTILE -> PROJECTILE;
+                case ENCHANTMENT -> ENCHANTMENT;
+                case WORLD -> WORLD;
+            };
+        }
 
         public final TargetType type;
         Kind(TargetType type) { this.type = type; }
@@ -127,27 +141,29 @@ public final class CraftStatsNetwork {
         MinecraftServer server = Compat.server(player);
         if (server == null || !checkAccess(player, kind)) return;
         try {
+            Object parsed = StatSchema.parse(kind.type, json);
+            StatAccess.sanitize(kind.type, parsed);
             switch (kind) {
                 case MOB -> {
                     ResourceLocation id = registered(BuiltInRegistries.ENTITY_TYPE, key);
                     if (blacklisted(player, id.toString())) return;
-                    StatRegistry.setMob(id, StatSchema.mob(json));
+                    StatRegistry.setMob(id, (MobStats) parsed);
                     StatApplier.refreshMobs(server, id);
                 }
                 case MOB_INSTANCE -> {
                     UUID uuid = UUID.fromString(key);
                     Entity entity = findEntity(server, uuid);
                     if (entity != null && blacklisted(player, EntityType.getKey(entity.getType()).toString())) return;
-                    StatRegistry.setMobInstance(uuid, StatSchema.mob(json));
+                    StatRegistry.setMobInstance(uuid, (MobStats) parsed);
                     StatApplier.refreshMob(server, uuid);
                 }
                 case BLOCK -> {
                     ResourceLocation id = registered(BuiltInRegistries.BLOCK, key);
                     if (blacklisted(player, id.toString())) return;
-                    StatRegistry.setBlock(id, StatSchema.block(json));
+                    StatRegistry.setBlock(id, (BlockStats) parsed);
                 }
                 case BLOCK_POS -> {
-                    BlockStats stats = StatSchema.block(json);
+                    BlockStats stats = (BlockStats) parsed;
                     stats.block = blockAt(server, key);
                     if (blacklisted(player, stats.block)) return;
                     StatRegistry.setBlockAt(key, stats);
@@ -155,12 +171,27 @@ public final class CraftStatsNetwork {
                 case ITEM -> {
                     ResourceLocation id = registered(BuiltInRegistries.ITEM, key);
                     if (blacklisted(player, id.toString())) return;
-                    StatRegistry.setItem(id, StatSchema.item(json));
+                    StatRegistry.setItem(id, (ItemStats) parsed);
                 }
                 case PLAYER -> {
                     UUID uuid = UUID.fromString(key);
-                    StatRegistry.setPlayer(uuid, StatSchema.player(json));
+                    StatRegistry.setPlayer(uuid, (PlayerStats) parsed);
                     StatApplier.refreshPlayer(server, uuid);
+                }
+                case PROJECTILE -> {
+                    ResourceLocation id = registered(BuiltInRegistries.ENTITY_TYPE, key);
+                    if (blacklisted(player, id.toString())) return;
+                    StatRegistry.setProjectile(id, (ProjectileStats) parsed);
+                }
+                case ENCHANTMENT -> {
+                    ResourceLocation id = registered(Compat.enchantments(server.registryAccess()), key);
+                    if (blacklisted(player, id.toString())) return;
+                    StatRegistry.setEnchantment(id, (EnchantmentStats) parsed);
+                }
+                case WORLD -> {
+                    StatRegistry.setWorld((WorldStats) parsed);
+                    StatApplier.refreshMobs(server, null);
+                    StatApplier.refreshAllPlayers(server);
                 }
             }
         } catch (Exception e) {
@@ -192,6 +223,13 @@ public final class CraftStatsNetwork {
                     UUID uuid = UUID.fromString(key);
                     StatRegistry.removePlayer(uuid);
                     StatApplier.refreshPlayer(server, uuid);
+                }
+                case PROJECTILE  -> StatRegistry.removeProjectile(ResourceLocation.parse(key));
+                case ENCHANTMENT -> StatRegistry.removeEnchantment(ResourceLocation.parse(key));
+                case WORLD -> {
+                    StatRegistry.removeWorld();
+                    StatApplier.refreshMobs(server, null);
+                    StatApplier.refreshAllPlayers(server);
                 }
             }
         } catch (Exception e) {

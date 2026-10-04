@@ -74,6 +74,9 @@ public final class CraftStatsConfig {
         public boolean enableMobEditor = true;
         public boolean enableItemEditor = true;
         public boolean enablePlayerEditor = true;
+        public boolean enableProjectileEditor = true;
+        public boolean enableEnchantmentEditor = true;
+        public boolean enableWorldEditor = true;
         public boolean enableRandomize = true;
         public boolean enablePresets = true;
 
@@ -84,10 +87,13 @@ public final class CraftStatsConfig {
 
         public boolean isEnabled(TargetType type) {
             return switch (type) {
-                case MOB    -> enableMobEditor;
-                case BLOCK  -> enableBlockEditor;
-                case ITEM   -> enableItemEditor;
-                case PLAYER -> enablePlayerEditor;
+                case MOB         -> enableMobEditor;
+                case BLOCK       -> enableBlockEditor;
+                case ITEM        -> enableItemEditor;
+                case PLAYER      -> enablePlayerEditor;
+                case PROJECTILE  -> enableProjectileEditor;
+                case ENCHANTMENT -> enableEnchantmentEditor;
+                case WORLD       -> enableWorldEditor;
             };
         }
 

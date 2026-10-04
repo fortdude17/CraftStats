@@ -108,8 +108,17 @@ public final class PresetManager {
         MobStats boss = new MobStats();
         boss.maxHealth = 500.0; boss.attackDamage = 15.0; boss.sizeScale = 2.5; boss.knockbackResist = 1.0;
         boss.immuneFire = true; boss.immuneFall = true; boss.immuneExplosion = true; boss.canDespawn = false;
-        boss.glowing = true; boss.xpReward = 500;
+        boss.glowing = true; boss.xpReward = 500; boss.regenPerSecond = 1.0; boss.thornsPercent = 25.0;
         add("boss", TargetType.MOB, boss);
+        MobStats statue = new MobStats();
+        statue.noAi = true; statue.invincible = true; statue.silent = true; statue.noPush = true; statue.canDespawn = false;
+        add("statue", TargetType.MOB, statue);
+        MobStats berserker = new MobStats();
+        berserker.hostile = true; berserker.moveSpeed = 0.35; berserker.damageDealtMultiplier = 2.0; berserker.lifestealPercent = 50.0;
+        add("berserker", TargetType.MOB, berserker);
+        MobStats creeperish = new MobStats();
+        creeperish.explodeOnDeath = 3f; creeperish.lightningOnDeath = true;
+        add("explodes_on_death", TargetType.MOB, creeperish);
 
         add("vanilla", TargetType.BLOCK, new BlockStats());
         BlockStats reinforced = new BlockStats();
@@ -118,9 +127,18 @@ public final class PresetManager {
         BlockStats ice = new BlockStats();
         ice.slipperiness = 0.98f;
         add("slippery", TargetType.BLOCK, ice);
+        BlockStats levitation = new BlockStats();
+        levitation.levitate = true; levitation.glowOnStep = true;
+        add("levitation_pad", TargetType.BLOCK, levitation);
         BlockStats trampoline = new BlockStats();
-        trampoline.levitate = true; trampoline.glowOnStep = true;
-        add("levitation_pad", TargetType.BLOCK, trampoline);
+        trampoline.bounciness = 1.0f; trampoline.landingDamageMultiplier = 0f;
+        add("trampoline", TargetType.BLOCK, trampoline);
+        BlockStats launch = new BlockStats();
+        launch.launchPower = 1.5f; launch.landingDamageMultiplier = 0f;
+        add("launch_pad", TargetType.BLOCK, launch);
+        BlockStats landmine = new BlockStats();
+        landmine.explodeOnBreak = 3f; landmine.noDrops = true;
+        add("booby_trap", TargetType.BLOCK, landmine);
 
         add("vanilla", TargetType.ITEM, new ItemStats());
         ItemStats op = new ItemStats();
@@ -129,6 +147,15 @@ public final class PresetManager {
         ItemStats snack = new ItemStats();
         snack.edible = ItemStats.EDIBLE_YES; snack.nutrition = 4; snack.saturation = 2.4f; snack.eatSeconds = 0.8f;
         add("quick_snack", TargetType.ITEM, snack);
+        ItemStats boomerang = new ItemStats();
+        boomerang.throwable = true; boomerang.boomerang = true; boomerang.throwDamage = 6f;
+        add("boomerang", TargetType.ITEM, boomerang);
+        ItemStats grenade = new ItemStats();
+        grenade.throwable = true; grenade.explodeOnImpact = 2.5f; grenade.throwDamage = 0f; grenade.useCooldown = 1f;
+        add("grenade", TargetType.ITEM, grenade);
+        ItemStats charm = new ItemStats();
+        charm.bonusSlot = "any"; charm.bonusMoveSpeed = 0.05; charm.bonusJump = 0.2; charm.bonusSafeFall = 10.0;
+        add("speed_charm", TargetType.ITEM, charm);
 
         add("vanilla", TargetType.PLAYER, new PlayerStats());
         PlayerStats builder = new PlayerStats();
@@ -144,6 +171,39 @@ public final class PresetManager {
         PlayerStats god = new PlayerStats();
         god.maxHealth = 100.0; god.godMode = true; god.keepInventory = true; god.fxNightVision = true;
         add("god_mode", TargetType.PLAYER, god);
+        PlayerStats giant = new PlayerStats();
+        giant.size = 3.0; giant.reachDistance = 9.0; giant.entityReach = 6.0; giant.maxHealth = 60.0;
+        add("giant", TargetType.PLAYER, giant);
+
+        add("vanilla", TargetType.PROJECTILE, new ProjectileStats());
+        ProjectileStats explosive = new ProjectileStats();
+        explosive.explodeOnHit = 2.0f;
+        add("explosive", TargetType.PROJECTILE, explosive);
+        ProjectileStats homing = new ProjectileStats();
+        homing.homing = true; homing.speedMultiplier = 1.5;
+        add("homing", TargetType.PROJECTILE, homing);
+        ProjectileStats laser = new ProjectileStats();
+        laser.noGravity = true; laser.speedMultiplier = 3.0; laser.piercing = 5; laser.lifetimeSeconds = 5;
+        add("laser", TargetType.PROJECTILE, laser);
+
+        add("vanilla", TargetType.ENCHANTMENT, new EnchantmentStats());
+        EnchantmentStats overcharged = new EnchantmentStats();
+        overcharged.levelBonus = 3; overcharged.maxLevel = 10;
+        add("overcharged", TargetType.ENCHANTMENT, overcharged);
+        EnchantmentStats universal = new EnchantmentStats();
+        universal.anyItem = true; universal.ignoreConflicts = true;
+        add("universal", TargetType.ENCHANTMENT, universal);
+
+        add("vanilla", TargetType.WORLD, new WorldStats());
+        WorldStats moon = new WorldStats();
+        moon.gravityMultiplier = 0.3; moon.fallDamageMultiplier = 0.2;
+        add("moon_gravity", TargetType.WORLD, moon);
+        WorldStats hard = new WorldStats();
+        hard.mobHealthMultiplier = 2.0; hard.mobDamageMultiplier = 2.0; hard.spawnCapMultiplier = 2.0;
+        add("hard_mode", TargetType.WORLD, hard);
+        WorldStats chill = new WorldStats();
+        chill.mobsIgnorePlayers = true; chill.alwaysClear = true; chill.dayLengthMultiplier = 3.0;
+        add("chill", TargetType.WORLD, chill);
     }
 
     private static void add(String name, TargetType type, Object stats) {

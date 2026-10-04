@@ -26,11 +26,29 @@ public final class StatSchema {
 
     public static Class<?> classFor(TargetType type) {
         return switch (type) {
-            case MOB    -> MobStats.class;
-            case BLOCK  -> BlockStats.class;
-            case ITEM   -> ItemStats.class;
-            case PLAYER -> PlayerStats.class;
+            case MOB         -> MobStats.class;
+            case BLOCK       -> BlockStats.class;
+            case ITEM        -> ItemStats.class;
+            case PLAYER      -> PlayerStats.class;
+            case PROJECTILE  -> ProjectileStats.class;
+            case ENCHANTMENT -> EnchantmentStats.class;
+            case WORLD       -> WorldStats.class;
         };
+    }
+
+    /** A fresh object with no overrides. */
+    public static Object empty(TargetType type) {
+        try {
+            return classFor(type).getConstructor().newInstance();
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** A deep copy of any stats object. */
+    @SuppressWarnings("unchecked")
+    public static <T> T copyAny(T stats) {
+        return (T) GSON_COMPACT.fromJson(GSON_COMPACT.toJsonTree(stats), stats.getClass());
     }
 
     /** Parses stats of the given type, migrating legacy data. Never returns null. */
@@ -85,6 +103,7 @@ public final class StatSchema {
                 removeIf(o, "burning_time", 8.0);          // attribute is a multiplier (vanilla 1.0)
                 removeIf(o, "sweeping_damage_ratio", 1.0); // vanilla is 0.0
             }
+            default -> {} // types added after 1.0 never had legacy data
         }
     }
 

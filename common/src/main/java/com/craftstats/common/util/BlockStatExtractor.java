@@ -30,6 +30,8 @@ public final class BlockStatExtractor {
 
         stats.blastResistance = ((BlockBehaviourAccessor) block).craftstats$getExplosionResistance();
         stats.slipperiness    = ((BlockBehaviourAccessor) block).craftstats$getFriction();
+        stats.speedFactor     = ((BlockBehaviourAccessor) block).craftstats$getSpeedFactor();
+        stats.jumpFactor      = ((BlockBehaviourAccessor) block).craftstats$getJumpFactor();
         stats.lightEmission   = block.defaultBlockState().getLightEmission();
         stats.pushReaction    = "normal";
 

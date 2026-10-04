@@ -15,6 +15,7 @@ import net.minecraft.world.food.FoodProperties;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.component.ItemAttributeModifiers;
 import net.minecraft.world.item.component.Tool;
+import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.level.block.Block;
 
 /**
@@ -30,15 +31,20 @@ public final class VanillaStats {
         MobStats s = new MobStats();
         if (!DefaultAttributes.hasSupplier(type)) return s;
         AttributeSupplier sup = DefaultAttributes.getSupplier((EntityType<? extends LivingEntity>) type);
-        s.maxHealth       = base(sup, Attributes.MAX_HEALTH);
-        s.attackDamage    = base(sup, Attributes.ATTACK_DAMAGE);
-        s.armor           = base(sup, Attributes.ARMOR);
-        s.knockbackResist = base(sup, Attributes.KNOCKBACK_RESISTANCE);
-        s.moveSpeed       = base(sup, Attributes.MOVEMENT_SPEED);
-        s.jumpForce       = base(sup, Attributes.JUMP_STRENGTH);
-        s.followRange     = base(sup, Attributes.FOLLOW_RANGE);
-        s.sizeScale       = base(sup, Attributes.SCALE);
+        for (MobAttributes.Link link : MobAttributes.LINKS) {
+            if (link.field().equals("absorption")) continue; // the attribute is a cap, not an amount
+            StatAccess.set(s, link.field(), base(sup, link.attribute()));
+        }
         return s;
+    }
+
+    /** True if mobs of this type have the attribute behind a stat (others ignore it). */
+    @SuppressWarnings("unchecked")
+    public static boolean mobSupports(EntityType<?> type, String field) {
+        Holder<Attribute> attr = MobAttributes.forField(field);
+        if (attr == null) return true;
+        return DefaultAttributes.hasSupplier(type)
+                && DefaultAttributes.getSupplier((EntityType<? extends LivingEntity>) type).hasAttribute(attr);
     }
 
     private static Double base(AttributeSupplier sup, Holder<Attribute> attr) {
@@ -80,5 +86,32 @@ public final class VanillaStats {
 
     public static PlayerStats player() {
         return new PlayerStats();
+    }
+
+    public static ProjectileStats projectile() {
+        return new ProjectileStats();
+    }
+
+    /** Reads the definition directly, bypassing CraftStats' own overrides. */
+    public static EnchantmentStats enchantment(Enchantment enchantment) {
+        EnchantmentStats s = new EnchantmentStats();
+        if (enchantment == null) return s;
+        s.maxLevel = enchantment.definition().maxLevel();
+        s.weight = enchantment.definition().weight();
+        s.anvilCost = enchantment.definition().anvilCost();
+        return s;
+    }
+
+    public static WorldStats world() {
+        return new WorldStats();
+    }
+
+    public static Object of(TargetType type) {
+        return switch (type) {
+            case PLAYER -> player();
+            case PROJECTILE -> projectile();
+            case WORLD -> world();
+            default -> StatSchema.empty(type);
+        };
     }
 }

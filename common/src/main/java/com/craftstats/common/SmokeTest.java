@@ -126,21 +126,37 @@ public final class SmokeTest {
         exit.start();
     }
 
-    /** Every GUI field must exist on its stats class with a type the field row can edit. */
+    /**
+     * Every catalog entry must exist on its stats class with a type the editor can edit, every
+     * public stats field must be in the catalog (so nothing is hidden from the editor), and
+     * the four main types must have at least 50 stats each.
+     */
     static void checkFieldDefinitions() throws NoSuchFieldException {
         for (TargetType type : TargetType.values()) {
-            for (var tab : com.craftstats.common.gui.panel.StatFields.tabs(type)) {
-                for (var def : tab.fields()) {
-                    Class<?> t = StatSchema.classFor(type).getField(def.fieldName()).getType();
-                    boolean ok = switch (def.type()) {
-                        case NUMBER -> t == int.class || t == double.class || t == float.class || t == long.class
-                                || Number.class.isAssignableFrom(t);
-                        case TOGGLE -> t == boolean.class;
-                        case PILL, TEXT -> t == String.class;
-                    };
-                    check(ok, type + "." + def.fieldName() + " has type " + t.getSimpleName() + " but is a " + def.type());
-                }
+            Class<?> cls = StatSchema.classFor(type);
+            java.util.Set<String> listed = new java.util.HashSet<>();
+            for (StatDef def : StatCatalog.all(type)) {
+                check(listed.add(def.field()), type + "." + def.field() + " is listed twice");
+                Class<?> t = cls.getField(def.field()).getType();
+                boolean ok = switch (def.kind()) {
+                    case NUMBER -> t == int.class || t == double.class || t == float.class || t == long.class
+                            || Number.class.isAssignableFrom(t);
+                    case TOGGLE -> t == boolean.class;
+                    case CHOICE, TEXT -> t == String.class;
+                };
+                check(ok, type + "." + def.field() + " has type " + t.getSimpleName() + " but is a " + def.kind());
+                if (def.kind() == StatDef.Kind.CHOICE)
+                    check(java.util.Arrays.asList(def.options()).contains(String.valueOf(StatAccess.get(StatSchema.empty(type), def.field()))),
+                            type + "." + def.field() + " default is not one of its options");
             }
+            for (java.lang.reflect.Field f : cls.getFields()) {
+                if (java.lang.reflect.Modifier.isStatic(f.getModifiers()) || f.getName().equals("schema") || f.getName().equals("block")) continue;
+                check(listed.contains(f.getName()), type + "." + f.getName() + " is not shown in the editor");
+            }
+            if (type == TargetType.MOB || type == TargetType.BLOCK || type == TargetType.ITEM || type == TargetType.PLAYER)
+                check(listed.size() >= 50, type + " has only " + listed.size() + " stats");
+            CraftStats.LOGGER.info("smoke test: {} has {} stats in {} categories", type.plural(), listed.size(),
+                    StatCatalog.categories(type).size());
         }
     }
 

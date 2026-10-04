@@ -26,7 +26,8 @@ public class ConfigScreen extends BaseScreen {
 
     @Override
     protected void init() {
-        int colW = 180, gap = 8, rowH = 22;
+        int gap = 8, rowH = 22;
+        int colW = Math.min(180, (this.width - 20 - gap) / 2);
         int left = this.width / 2 - colW - gap / 2, right = this.width / 2 + gap / 2;
         int y = 40;
 
@@ -39,14 +40,18 @@ public class ConfigScreen extends BaseScreen {
         toggle(left, y, colW, "Item editor", () -> cfg.enableItemEditor, v -> cfg.enableItemEditor = v);
         toggle(right, y, colW, "Player editor", () -> cfg.enablePlayerEditor, v -> cfg.enablePlayerEditor = v);
         y += rowH;
-        toggle(left, y, colW, "Randomize", () -> cfg.enableRandomize, v -> cfg.enableRandomize = v);
-        toggle(right, y, colW, "Presets", () -> cfg.enablePresets, v -> cfg.enablePresets = v);
+        toggle(left, y, colW, "Projectile editor", () -> cfg.enableProjectileEditor, v -> cfg.enableProjectileEditor = v);
+        toggle(right, y, colW, "Enchantment editor", () -> cfg.enableEnchantmentEditor, v -> cfg.enableEnchantmentEditor = v);
         y += rowH;
+        toggle(left, y, colW, "World editor", () -> cfg.enableWorldEditor, v -> cfg.enableWorldEditor = v);
+        toggle(right, y, colW, "Randomize", () -> cfg.enableRandomize, v -> cfg.enableRandomize = v);
+        y += rowH;
+        toggle(left, y, colW, "Presets", () -> cfg.enablePresets, v -> cfg.enablePresets = v);
         addRenderableWidget(Button.builder(intensityLabel(), b -> {
             int i = INTENSITIES.indexOf(cfg.randomizeIntensity.toLowerCase());
             cfg.randomizeIntensity = INTENSITIES.get((i + 1) % INTENSITIES.size());
             b.setMessage(intensityLabel());
-        }).bounds(left, y, colW * 2 + gap, 20).build());
+        }).bounds(right, y, colW, 20).build());
 
         addRenderableWidget(Button.builder(Component.literal("Save"), b -> { CraftStatsConfig.save(); onClose(); })
                 .bounds(this.width / 2 - 104, this.height - 30, 100, 20).build());
@@ -55,7 +60,7 @@ public class ConfigScreen extends BaseScreen {
     }
 
     private Component intensityLabel() {
-        return Component.literal("Randomize intensity: " + cfg.randomizeIntensity);
+        return Component.literal("Randomize: " + cfg.randomizeIntensity);
     }
 
     private void toggle(int x, int y, int w, String label, BooleanSupplier get, Consumer<Boolean> set) {

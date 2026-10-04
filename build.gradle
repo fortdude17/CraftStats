@@ -80,6 +80,8 @@ subprojects {
     // ./gradlew :fabric:runServer -PsmokeTest  boots a server that self-tests and exits (see SmokeTest).
     if (project.hasProperty("smokeTest") && project.name != "common") {
         loom.runs.configureEach { vmArg("-Dcraftstats.smokeTest=true") }
+        // -Pscreenshots: the client test asks the CI script for screenshots of each screen.
+        if (project.hasProperty("screenshots")) loom.runs.configureEach { vmArg("-Dcraftstats.screenshots=true") }
     }
 
     // Version-specific resources: src/main/resources-<mc>/ replaces files of the same path.

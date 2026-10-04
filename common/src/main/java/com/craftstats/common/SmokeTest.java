@@ -114,6 +114,14 @@ public final class SmokeTest {
             CraftStats.LOGGER.error("CRAFTSTATS-SMOKE-FAIL: {}", String.join("; ", failures));
         }
         server.halt(false);
+        // The dedicated server JVM doesn't always exit by itself after halting (lingering
+        // non-daemon threads), which would leave CI waiting for a timeout.
+        Thread exit = new Thread(() -> {
+            try { Thread.sleep(30_000); } catch (InterruptedException ignored) {}
+            Runtime.getRuntime().halt(0);
+        }, "craftstats-smoke-exit");
+        exit.setDaemon(true);
+        exit.start();
     }
 
     private interface Check { void run() throws Exception; }

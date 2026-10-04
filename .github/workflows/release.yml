@@ -1,11 +1,13 @@
 name: Release
 
-# Push a tag like v1.1.2 (matching mod_version in gradle.properties) to build every
-# Minecraft version and publish the jars as a GitHub pre-release. Mark it as a full
-# release on GitHub once it has been tested.
+# Builds every Minecraft version and publishes the jars as a GitHub pre-release tagged
+# v<mod_version>. Start it either by pushing that tag, or from the Actions tab
+# ("Run workflow" on main), which creates the tag. Mark the release as a full release on
+# GitHub once it has been tested.
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -14,17 +16,21 @@ jobs:
   build:
     name: Minecraft ${{ matrix.mc }}
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
     strategy:
       matrix:
         mc: ['1.21.1', '1.21.11']
     steps:
       - uses: actions/checkout@v5
-      - name: Check tag matches mod_version
+      - name: Work out the release tag
+        id: version
         run: |
           version=$(grep '^mod_version=' gradle.properties | cut -d= -f2)
-          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "v$version" != "$GITHUB_REF_NAME" ]; then
             echo "::error::Tag $GITHUB_REF_NAME doesn't match mod_version=$version"; exit 1
           fi
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -57,14 +63,18 @@ jobs:
           merge-multiple: true
           path: dist
       - name: Release notes from CHANGELOG.md
+        env:
+          TAG: ${{ needs.build.outputs.tag }}
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${TAG#v}"
           awk -v v="$version" '/^## /{p=($2==v); next} p' CHANGELOG.md > notes.md
           test -s notes.md || echo "See CHANGELOG.md" > notes.md
           ls -l dist
       - uses: softprops/action-gh-release@v2
         with:
-          name: CraftStats ${{ github.ref_name }}
+          tag_name: ${{ needs.build.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: CraftStats ${{ needs.build.outputs.tag }}
           body_path: notes.md
           files: dist/*.jar
           prerelease: true

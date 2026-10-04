@@ -11,14 +11,7 @@ jobs:
     strategy:
       matrix:
         group:
-          - "GuiGraphics Screen AbstractWidget Button EditBox AbstractSliderButton Tooltip StringWidget SpawnEggItem"
-          - "Entity"
-          - "LivingEntity"
-          - "Mob PathfinderMob Projectile AbstractArrow ThrowableItemProjectile ThrowableProjectile Snowball AbstractHurtingProjectile"
-          - "Enchantment EnchantmentHelper ItemEnchantments Block BlockBehaviour BlockBehaviour\\$BlockStateBase"
-          - "ServerPlayerGameMode ItemEntity Level FireBlock FoodData AnvilMenu"
-          - "ServerLevel Player"
-          - "ServerPlayer EntityType MultiPlayerGameMode"
+          - "BlockStateBase InteractionResult RegistryAccess CommandSourceStack Repairable SimpleSoundInstance"
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
@@ -37,7 +30,7 @@ jobs:
           MC=$(find . ~/.gradle -name 'minecraft-merged-*1.21.11*.jar' ! -name '*sources*' 2>/dev/null | head -1)
           unzip -Z1 "$MC" | grep '\.class$' > mc.txt
           for n in $NAMES; do
-            for c in $(grep -E "/${n//\$/\\\$}\.class$" mc.txt | head -2); do
+            for c in $(grep -E "[/\$]${n}\.class$" mc.txt | head -2); do
               echo "########## $c"
               javap -p -cp "$MC" "${c%.class}" 2>&1 | grep -v '^Compiled from' | grep -v 'EntityDataAccessor' | cut -c1-400
             done

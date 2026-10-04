@@ -8,6 +8,17 @@ on:
 jobs:
   probe:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        group:
+          - "GuiGraphics Screen AbstractWidget Button EditBox AbstractSliderButton Tooltip StringWidget SpawnEggItem"
+          - "Entity"
+          - "LivingEntity"
+          - "Mob PathfinderMob Projectile AbstractArrow ThrowableItemProjectile ThrowableProjectile Snowball AbstractHurtingProjectile"
+          - "Enchantment EnchantmentHelper ItemEnchantments Block BlockBehaviour BlockBehaviour\\$BlockStateBase"
+          - "ServerPlayerGameMode ItemEntity Level FireBlock FoodData AnvilMenu"
+          - "ServerLevel Player"
+          - "ServerPlayer EntityType MultiPlayerGameMode"
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
@@ -20,24 +31,14 @@ jobs:
           chmod +x gradlew
           ./gradlew :common:compileJava -Pmc=1.21.11 --console=plain -q > /dev/null 2>&1 || true
       - name: Dump signatures
+        env:
+          NAMES: ${{ matrix.group }}
         run: |
           MC=$(find . ~/.gradle -name 'minecraft-merged-*1.21.11*.jar' ! -name '*sources*' 2>/dev/null | head -1)
-          ARCH=$(find . ~/.gradle -name 'architectury-19*.jar' ! -name '*sources*' ! -name '*fabric*' ! -name '*neoforge*' 2>/dev/null | head -1)
-          find . ~/.gradle -name 'architectury*.jar' 2>/dev/null | head
-          echo "MC=$MC ARCH=$ARCH"
           unzip -Z1 "$MC" | grep '\.class$' > mc.txt
-          touch arch.txt
-          [ -n "$ARCH" ] && unzip -Z1 "$ARCH" | grep '\.class$' > arch.txt
-          names="GuiGraphics Screen AbstractWidget Button EditBox AbstractSliderButton Tooltip StringWidget SpawnEggItem EntityType Entity LivingEntity Mob PathfinderMob Projectile AbstractArrow ThrowableItemProjectile ThrowableProjectile Snowball AbstractHurtingProjectile Enchantment EnchantmentHelper ItemEnchantments Block BlockBehaviour BlockBehaviour\$BlockStateBase ServerPlayerGameMode ItemEntity ExperienceOrb Level ServerLevel FireBlock FoodData Player ServerPlayer Item ItemStack DataComponents Attributes MobCategory NaturalSpawner LightningBolt GoalSelector MeleeAttackGoal NearestAttackableTargetGoal Wolf SoundType EquipmentSlotGroup ItemAttributeModifiers ItemAttributeModifiers\$Builder Rarity Repairable UseCooldown ThrownItemRenderer EntityRendererProvider DamageSources DamageTypeTags MobEffects Abilities AttributeModifier AttributeInstance GameRules CropBlock ItemCooldowns Minecraft LevelRenderer ParticleTypes Explosion ServerExplosion Inventory EnchantmentEffectComponents TooltipDisplay Tool MobSpawnSettings ServerLevelData LevelData Leashable SoundEvents WindowTooltipHolder WidgetTooltipHolder CycleButton FallingBlockEntity ExperienceOrb Commands EntitySpawnReason MobSpawnType Unit Consumable FoodProperties DyedItemColor Weapon ProjectileUtil ServerPlayer\$RespawnReason"
-          for n in $names; do
-            for c in $(grep -E "/${n//\$/\\\$}\.class$" mc.txt | head -3); do
+          for n in $NAMES; do
+            for c in $(grep -E "/${n//\$/\\\$}\.class$" mc.txt | head -2); do
               echo "########## $c"
-              javap -p -cp "$MC" "${c%.class}" 2>&1 | grep -v '^Compiled from'
-            done
-          done
-          for n in DeferredRegister RegistrySupplier EntityRendererRegistry EntityEvent BlockEvent InteractionEvent TickEvent PlayerEvent LifecycleEvent NetworkManager EventResult CompoundEventResult ClientGuiEvent ClientTickEvent; do
-            for c in $(grep -E "/${n}\.class$" arch.txt | head -3); do
-              echo "########## ARCH $c"
-              javap -p -cp "$ARCH:$MC" "${c%.class}" 2>&1 | grep -v '^Compiled from'
+              javap -p -cp "$MC" "${c%.class}" 2>&1 | grep -v '^Compiled from' | grep -v 'EntityDataAccessor' | cut -c1-400
             done
           done

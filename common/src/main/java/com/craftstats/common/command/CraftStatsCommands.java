@@ -9,7 +9,6 @@ import com.craftstats.common.randomize.RandomizeManager;
 import com.craftstats.common.stats.*;
 import com.craftstats.common.util.Compat;
 import com.mojang.brigadier.CommandDispatcher;
-import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
@@ -103,12 +102,11 @@ public final class CraftStatsCommands {
                                                 .then(Commands.argument("id", StringArgumentType.greedyString()).suggests(TARGET_IDS)
                                                         .executes(CraftStatsCommands::loadPreset))))))
 
+                // "<id> [seed]" is one greedy argument: plain word arguments can't contain ':'.
                 .then(Commands.literal("randomize")
                         .then(Commands.argument("type", StringArgumentType.word()).suggests(EDITABLE_TYPES)
-                                .then(Commands.argument("id", StringArgumentType.word()).suggests(TARGET_IDS)
-                                        .executes(ctx -> randomize(ctx, RandomizeManager.newSeed()))
-                                        .then(Commands.argument("seed", LongArgumentType.longArg())
-                                                .executes(ctx -> randomize(ctx, LongArgumentType.getLong(ctx, "seed")))))))
+                                .then(Commands.argument("id", StringArgumentType.greedyString()).suggests(TARGET_IDS)
+                                        .executes(CraftStatsCommands::randomize))))
         );
     }
 
@@ -193,14 +191,22 @@ public final class CraftStatsCommands {
         return 1;
     }
 
-    private static int randomize(CommandContext<CommandSourceStack> ctx, long seed) {
+    private static int randomize(CommandContext<CommandSourceStack> ctx) {
         CommandSourceStack src = ctx.getSource();
+        String[] parts = StringArgumentType.getString(ctx, "id").trim().split("\\s+");
+        String id = parts[0];
+        long seed;
+        try {
+            seed = parts.length > 1 ? Long.parseLong(parts[1]) : RandomizeManager.newSeed();
+        } catch (NumberFormatException e) {
+            src.sendFailure(Component.literal("Seed must be a number: " + parts[1]));
+            return 0;
+        }
         if (!CraftStatsConfig.get().enableRandomize) {
             src.sendFailure(Component.literal("Randomize is disabled in the CraftStats config."));
             return 0;
         }
         MinecraftServer server = src.getServer();
-        String id = StringArgumentType.getString(ctx, "id");
         TargetType type = parseType(src, StringArgumentType.getString(ctx, "type"));
         if (type == null) return 0;
         switch (type) {

@@ -8,7 +8,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.monster.Zombie;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -65,7 +65,7 @@ public final class SmokeTest {
             zombieStats.maxHealth = 80.0;
             StatRegistry.setMob(id("zombie"), zombieStats);
             ServerLevel level = server.overworld();
-            Zombie zombie = EntityType.ZOMBIE.create(level
+            LivingEntity zombie = EntityType.ZOMBIE.create(level
                     //#if MC >= 1.21.2
                     //$ , net.minecraft.world.entity.EntitySpawnReason.COMMAND
                     //#endif

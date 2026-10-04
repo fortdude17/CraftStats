@@ -12,6 +12,11 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+//#if MC >= 1.21.11
+//$ import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
+//#else
+import net.minecraft.world.entity.projectile.AbstractArrow;
+//#endif
 import org.spongepowered.asm.mixin.MixinEnvironment;
 
 import java.util.ArrayList;
@@ -110,6 +115,16 @@ public final class SmokeTest {
 
         step(failures, "sync encoding", () -> CraftStatsNetwork.broadcastSync(server));
 
+        step(failures, "new mob stats", () -> checkMobStats(server.overworld()));
+        step(failures, "combat stats", () -> checkCombat(server.overworld()));
+        step(failures, "death effects", () -> checkDeath(server.overworld()));
+        step(failures, "new item stats", SmokeTest::checkItems);
+        step(failures, "new block stats", () -> checkBlocks(server.overworld()));
+        step(failures, "projectile stats", () -> checkProjectiles(server.overworld()));
+        step(failures, "enchantment stats", () -> checkEnchantments(server));
+        step(failures, "world stats", () -> checkWorld(server.overworld()));
+        StatRegistry.clear();
+
         if (failures.isEmpty()) {
             CraftStats.LOGGER.info("CRAFTSTATS-SMOKE-PASS");
         } else {
@@ -157,6 +172,198 @@ public final class SmokeTest {
                 check(listed.size() >= 50, type + " has only " + listed.size() + " stats");
             CraftStats.LOGGER.info("smoke test: {} has {} stats in {} categories", type.plural(), listed.size(),
                     StatCatalog.categories(type).size());
+        }
+    }
+
+    // ---- checks for the 1.2.0 stats ------------------------------------------------------
+
+    private static <T extends net.minecraft.world.entity.Entity> T spawn(ServerLevel level, EntityType<T> type) {
+        @SuppressWarnings("unchecked")
+        T e = (T) com.craftstats.common.util.Compat.createEntity(type, level);
+        check(e != null, "could not create " + type);
+        e.setPos(0.5, 120, 0.5);
+        level.addFreshEntity(e);
+        return e;
+    }
+
+    private static void checkMobStats(ServerLevel level) {
+        MobStats z = new MobStats();
+        z.attackKnockback = 2.0; z.armorToughness = 5.0; z.absorption = 10.0; z.noGravity = true; z.invisible = true;
+        z.noPush = true; z.noAi = true; z.stepHeight = 3.0; z.pickUpLoot = MobStats.LOOT_YES;
+        StatRegistry.setMob(id("zombie"), z);
+        MobStats cow = new MobStats();
+        cow.hostile = true; cow.attackDamage = 6.0;
+        StatRegistry.setMob(id("cow"), cow);
+        try {
+            var zombie = spawn(level, EntityType.ZOMBIE);
+            StatApplier.applyMob(zombie);
+            check(Math.abs(zombie.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.ARMOR_TOUGHNESS) - 5) < 0.01, "armor toughness");
+            check(Math.abs(zombie.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.STEP_HEIGHT) - 3) < 0.01, "step height");
+            check(zombie.getAbsorptionAmount() >= 9.9f, "absorption is " + zombie.getAbsorptionAmount());
+            check(zombie.isNoGravity() && zombie.isInvisible() && !zombie.isPushable() && zombie.isNoAi(), "no gravity / invisible / no push / no AI");
+            check(zombie.canPickUpLoot(), "pick up loot");
+            zombie.discard();
+            var c = spawn(level, EntityType.COW);
+            StatApplier.applyMob(c);
+            check(com.craftstats.common.logic.MobBehaviour.hasHostileGoals(c), "hostile cow has no attack goals");
+            c.discard();
+        } finally {
+            StatRegistry.removeMob(id("zombie"));
+            StatRegistry.removeMob(id("cow"));
+        }
+    }
+
+    private static void checkCombat(ServerLevel level) {
+        MobStats target = new MobStats();
+        target.damageTakenMultiplier = 0.5; target.immuneLightning = true;
+        StatRegistry.setMob(id("husk"), target);
+        MobStats attacker = new MobStats();
+        attacker.lifestealPercent = 100.0; attacker.hitEffect = "minecraft:slowness"; attacker.fireOnHit = 5;
+        StatRegistry.setMob(id("skeleton"), attacker);
+        try {
+            var husk = spawn(level, EntityType.HUSK);
+            var skel = spawn(level, EntityType.SKELETON);
+            husk.setNoAi(true); skel.setNoAi(true);
+            float before = husk.getHealth();
+            com.craftstats.common.util.Compat.hurt(husk, husk.damageSources().magic(), 8);
+            check(Math.abs((before - husk.getHealth()) - 4f) < 0.01f, "damage taken x0.5: lost " + (before - husk.getHealth()));
+            husk.invulnerableTime = 0;
+            float h2 = husk.getHealth();
+            com.craftstats.common.util.Compat.hurt(husk, husk.damageSources().lightningBolt(), 5);
+            check(husk.getHealth() == h2, "immune to lightning");
+            // Lifesteal: the attacker heals by the damage dealt.
+            husk.invulnerableTime = 0;
+            skel.setHealth(5f);
+            com.craftstats.common.util.Compat.hurt(husk, husk.damageSources().mobAttack(skel), 4);
+            check(husk.hasEffect(com.craftstats.common.util.Compat.SLOWNESS), "hit effect not applied");
+            check(husk.isOnFire(), "fire on hit not applied");
+            check(skel.getHealth() > 5f, "lifesteal: attacker health " + skel.getHealth());
+            // Thorns: the attacker takes damage back.
+            target.thornsPercent = 100.0;
+            attacker.lifestealPercent = null;
+            StatRegistry.changed();
+            husk.invulnerableTime = 0;
+            skel.invulnerableTime = 0;
+            float skelBefore = skel.getHealth();
+            com.craftstats.common.util.Compat.hurt(husk, husk.damageSources().mobAttack(skel), 4);
+            check(skel.getHealth() < skelBefore, "thorns: attacker health " + skel.getHealth() + " was " + skelBefore);
+            husk.discard(); skel.discard();
+        } finally {
+            StatRegistry.removeMob(id("husk"));
+            StatRegistry.removeMob(id("skeleton"));
+        }
+    }
+
+    private static void checkDeath(ServerLevel level) {
+        MobStats s = new MobStats();
+        s.spawnOnDeath = "minecraft:silverfish"; s.spawnOnDeathCount = 3;
+        StatRegistry.setMob(id("pig"), s);
+        try {
+            var pig = spawn(level, EntityType.PIG);
+            var area = pig.getBoundingBox().inflate(4);
+            java.util.function.Predicate<net.minecraft.world.entity.Entity> isSilverfish = e -> e.getType() == EntityType.SILVERFISH;
+            int before = level.getEntitiesOfClass(net.minecraft.world.entity.Entity.class, area, isSilverfish).size();
+            pig.die(pig.damageSources().magic());
+            int after = level.getEntitiesOfClass(net.minecraft.world.entity.Entity.class, area, isSilverfish).size();
+            check(after - before == 3, "spawn on death made " + (after - before) + " silverfish");
+            level.getEntitiesOfClass(net.minecraft.world.entity.Entity.class, area, isSilverfish).forEach(net.minecraft.world.entity.Entity::discard);
+            pig.discard();
+        } finally {
+            StatRegistry.removeMob(id("pig"));
+        }
+    }
+
+    private static void checkItems() {
+        ItemStats s = new ItemStats();
+        s.bonusMoveSpeed = 0.05; s.bonusSlot = "any"; s.rarity = "epic"; s.displayName = "Magic Stick";
+        s.repairMaterial = "minecraft:diamond"; s.maxDurability = 100;
+        StatRegistry.setItem(id("stick"), s);
+        try {
+            ItemStack stick = new ItemStack(Items.STICK);
+            var mods = stick.get(net.minecraft.core.component.DataComponents.ATTRIBUTE_MODIFIERS);
+            check(mods != null && mods.modifiers().stream().anyMatch(m -> m.attribute().equals(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED)),
+                    "move speed bonus missing");
+            check(stick.get(net.minecraft.core.component.DataComponents.RARITY) == net.minecraft.world.item.Rarity.EPIC, "rarity");
+            check(stick.getHoverName().getString().equals("Magic Stick"), "display name is " + stick.getHoverName().getString());
+            //#if MC >= 1.21.2
+            //$ check(stick.isValidRepairItem(new ItemStack(Items.DIAMOND)), "repair material");
+            //#endif
+        } finally {
+            StatRegistry.removeItem(id("stick"));
+        }
+    }
+
+    private static void checkBlocks(ServerLevel level) {
+        BlockStats s = new BlockStats();
+        s.jumpFactor = 2f; s.speedFactor = 0.3f; s.redstonePower = 9; s.soundType = "glass"; s.replaceable = true;
+        s.invisible = true; s.mobSpawning = "never"; s.noDrops = true;
+        StatRegistry.setBlock(id("dirt"), s);
+        try {
+            var state = Blocks.DIRT.defaultBlockState();
+            check(Blocks.DIRT.getJumpFactor() == 2f && Blocks.DIRT.getSpeedFactor() == 0.3f, "jump/speed factor");
+            check(state.isSignalSource() && state.getSignal(level, BlockPos.ZERO, net.minecraft.core.Direction.UP) == 9, "redstone power");
+            check(state.getSoundType() == net.minecraft.world.level.block.SoundType.GLASS, "sound type");
+            check(state.canBeReplaced(), "replaceable");
+            check(state.getRenderShape() == net.minecraft.world.level.block.RenderShape.INVISIBLE, "invisible");
+            check(!state.isValidSpawn(level, BlockPos.ZERO, EntityType.ZOMBIE), "mob spawning");
+            check(com.craftstats.common.logic.BlockHooks.replaceDrops(state, level, BlockPos.ZERO, ItemStack.EMPTY), "no drops");
+        } finally {
+            StatRegistry.removeBlock(id("dirt"));
+        }
+    }
+
+    private static void checkProjectiles(ServerLevel level) {
+        ProjectileStats s = new ProjectileStats();
+        s.speedMultiplier = 2.0; s.alwaysCrit = true; s.gravityMultiplier = 0.5; s.piercing = 3;
+        StatRegistry.setProjectile(id("arrow"), s);
+        try {
+            var arrow = com.craftstats.common.util.Compat.createEntity(EntityType.ARROW, level);
+            check(arrow != null, "could not create arrow");
+            arrow.setPos(0.5, 150, 0.5);
+            arrow.setDeltaMovement(1, 0, 0);
+            double vanillaGravity = 0.05;
+            level.addFreshEntity(arrow); // CraftStats applies launch stats when it enters the world
+            check(Math.abs(arrow.getDeltaMovement().x - 2) < 0.01, "speed x2: " + arrow.getDeltaMovement().x);
+            check(arrow instanceof AbstractArrow a && a.isCritArrow() && a.getPierceLevel() == 3, "crit / piercing");
+            check(Math.abs(arrow.getGravity() - vanillaGravity * 0.5) < 1.0E-4, "gravity x0.5: " + arrow.getGravity());
+            arrow.discard();
+        } finally {
+            StatRegistry.removeProjectile(id("arrow"));
+        }
+    }
+
+    private static void checkEnchantments(MinecraftServer server) {
+        var registry = com.craftstats.common.util.Compat.enchantments(server.registryAccess());
+        StatRegistry.trackEnchantments(registry);
+        EnchantmentStats s = new EnchantmentStats();
+        s.maxLevel = 10; s.levelBonus = 2;
+        StatRegistry.setEnchantment(id("sharpness"), s);
+        try {
+            var sharpness = com.craftstats.common.util.Compat.registryValue(registry, id("sharpness"));
+            check(sharpness != null && sharpness.getMaxLevel() == 10, "max level");
+            var holder = registry.wrapAsHolder(sharpness);
+            ItemStack sword = new ItemStack(Items.IRON_SWORD);
+            sword.enchant(holder, 1);
+            check(sword.getEnchantments().getLevel(holder) == 3, "level bonus: level is " + sword.getEnchantments().getLevel(holder));
+        } finally {
+            StatRegistry.removeEnchantment(id("sharpness"));
+        }
+    }
+
+    private static void checkWorld(ServerLevel level) {
+        int vanillaCap = net.minecraft.world.entity.MobCategory.MONSTER.getMaxInstancesPerChunk();
+        WorldStats w = new WorldStats();
+        w.gravityMultiplier = 0.5; w.spawnCapMultiplier = 2.0; w.mobHealthMultiplier = 2.0;
+        StatRegistry.setWorld(w);
+        try {
+            check(net.minecraft.world.entity.MobCategory.MONSTER.getMaxInstancesPerChunk() == vanillaCap * 2, "spawn cap");
+            var zombie = spawn(level, EntityType.ZOMBIE);
+            StatApplier.applyMob(zombie);
+            check(Math.abs(zombie.getMaxHealth() - 40f) < 0.01f, "mob health x2: " + zombie.getMaxHealth());
+            check(Math.abs(zombie.getGravity() - 0.04) < 1.0E-4, "gravity x0.5: " + zombie.getGravity());
+            zombie.discard();
+        } finally {
+            StatRegistry.removeWorld();
         }
     }
 

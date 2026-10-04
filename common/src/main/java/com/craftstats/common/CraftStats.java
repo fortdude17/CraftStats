@@ -15,6 +15,11 @@ import dev.architectury.event.events.common.CommandRegistrationEvent;
 import dev.architectury.event.events.common.EntityEvent;
 import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.event.events.common.PlayerEvent;
+import dev.architectury.event.events.common.TickEvent;
+import com.craftstats.common.logic.ProjectileHooks;
+import com.craftstats.common.logic.WorldHooks;
+import com.craftstats.common.util.Compat;
+import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.LivingEntity;
@@ -43,22 +48,33 @@ public final class CraftStats {
                 CraftStatsCommands.register(dispatcher));
 
         // Load before the levels so mobs in spawn chunks get their overrides.
-        LifecycleEvent.SERVER_STARTING.register(StatPersistence::init);
+        LifecycleEvent.SERVER_STARTING.register(server -> {
+            StatPersistence.init(server);
+            StatRegistry.trackEnchantments(Compat.enchantments(server.registryAccess()));
+        });
         LifecycleEvent.SERVER_STARTED.register(server -> {
             StatApplier.refreshMobs(server, null);
             if (SmokeTest.enabled()) SmokeTest.run(server);
         });
         LifecycleEvent.SERVER_STOPPING.register(server -> StatPersistence.save());
-        LifecycleEvent.SERVER_STOPPED.register(server -> StatPersistence.shutdown());
+        LifecycleEvent.SERVER_STOPPED.register(server -> {
+            StatPersistence.shutdown();
+            com.craftstats.common.logic.BlockHooks.clearRegrow();
+        });
 
         EntityEvent.ADD.register((entity, level) -> {
-            if (!level.isClientSide() && entity instanceof LivingEntity living && !(living instanceof Player)
-                    && StatRegistry.forEntity(living) != null) {
+            if (level.isClientSide()) return EventResult.pass();
+            if (entity instanceof LivingEntity living && !(living instanceof Player)
+                    && (StatRegistry.forEntity(living) != null || StatRegistry.world() != null)) {
                 MinecraftServer server = level.getServer();
                 if (server != null) server.execute(() -> StatApplier.applyMob(living));
+            } else if (entity instanceof Projectile projectile && StatRegistry.forProjectile(projectile) != null) {
+                ProjectileHooks.onSpawn(projectile);
             }
             return EventResult.pass();
         });
+        TickEvent.SERVER_LEVEL_POST.register(WorldHooks::levelTick);
+        TickEvent.SERVER_POST.register(server -> com.craftstats.common.logic.BlockHooks.serverTick());
 
         // Left-clicking with the wand copies stats (client side) instead of attacking.
         PlayerEvent.ATTACK_ENTITY.register((player, level, target, hand, hit) ->

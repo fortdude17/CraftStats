@@ -240,8 +240,7 @@ public class StatEditor {
         int titleX = back != null ? x + 26 : x;
         String title = !query.isEmpty() ? rows.size() + " matching stats"
                 : openCategory >= 0 ? categories.get(openCategory).name()
-                : categories.size() == 1 ? "1 category" : categories.size() + " categories, "
-                        + categories.stream().mapToInt(c -> c.stats().size()).sum() + " stats";
+                : categories.stream().mapToInt(c -> c.stats().size()).sum() + " stats";
         int titleMax = (search != null ? search.getX() : x + w) - titleX - 6;
         Ui.textFit(g, title, titleX, y + 8, titleMax, Ui.WHITE);
 

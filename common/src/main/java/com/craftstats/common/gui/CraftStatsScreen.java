@@ -192,7 +192,7 @@ public class CraftStatsScreen extends BaseScreen implements StatEditor.Host {
 
     private Component modifiedLabel() {
         int n = StatTargets.count(type);
-        return Component.literal(onlyModified ? "Showing changed (" + n + ")" : "Show changed only (" + n + ")")
+        return Component.literal((onlyModified ? "Changed only: " : "Changed: ") + n)
                 .withStyle(onlyModified ? ChatFormatting.YELLOW : ChatFormatting.WHITE);
     }
 

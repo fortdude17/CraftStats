@@ -2,6 +2,7 @@ package com.craftstats.common.mixin;
 
 import com.craftstats.common.stats.PlayerStats;
 import com.craftstats.common.stats.StatRegistry;
+import com.craftstats.common.stats.WorldStats;
 import com.craftstats.common.util.Compat;
 import net.minecraft.core.Holder;
 import net.minecraft.world.effect.MobEffect;
@@ -37,12 +38,13 @@ public abstract class PlayerMixin {
 
         if (self.level().isClientSide()) return;
         // Without flight, a no-clip player would fall through the world.
+        boolean fly = noClip || (ps != null && ps.canFly);
         var abilities = self.getAbilities();
-        if (noClip && !abilities.mayfly) {
+        if (fly && !abilities.mayfly) {
             abilities.mayfly = true;
             craftstats$grantedFlight = true;
             self.onUpdateAbilities();
-        } else if (!noClip && craftstats$grantedFlight) {
+        } else if (!fly && craftstats$grantedFlight) {
             craftstats$grantedFlight = false;
             if (!self.isCreative() && !self.isSpectator()) {
                 abilities.mayfly = false;
@@ -67,6 +69,12 @@ public abstract class PlayerMixin {
         if (ps.fxHaste > 0)    craftstats$grant(self, Compat.HASTE, ps.fxHaste - 1);
         if (ps.fxStrength > 0) craftstats$grant(self, Compat.STRENGTH, ps.fxStrength - 1);
         if (ps.fxSpeed > 0)    craftstats$grant(self, Compat.SPEED, ps.fxSpeed - 1);
+        if (ps.fxJumpBoost > 0) craftstats$grant(self, Compat.JUMP_BOOST, ps.fxJumpBoost - 1);
+        if (ps.fxResistance > 0) craftstats$grant(self, Compat.RESISTANCE, ps.fxResistance - 1);
+        if (ps.fxSlowFalling)   craftstats$grant(self, MobEffects.SLOW_FALLING, 0);
+        if (ps.fxDolphinsGrace) craftstats$grant(self, MobEffects.DOLPHINS_GRACE, 0);
+        if (ps.fxConduitPower)  craftstats$grant(self, MobEffects.CONDUIT_POWER, 0);
+        if (ps.fxSaturation)    craftstats$grant(self, MobEffects.SATURATION, 0);
     }
 
     private static void craftstats$grant(LivingEntity entity, Holder<MobEffect> effect, int amplifier) {
@@ -102,6 +110,8 @@ public abstract class PlayerMixin {
     /** Hunger drain rate and Infinite Sprint scale the exhaustion as it is added. */
     @ModifyVariable(method = "causeFoodExhaustion", at = @At("HEAD"), argsOnly = true)
     private float craftstats$hungerRate(float exhaustion) {
+        WorldStats w = StatRegistry.world();
+        if (w != null && w.hungerMultiplier != null) exhaustion *= (float) Math.max(0, w.hungerMultiplier);
         PlayerStats ps = StatRegistry.forPlayer((Player) (Object) this);
         if (ps == null) return exhaustion;
         if (ps.infiniteSprint) return 0f;

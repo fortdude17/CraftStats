@@ -1,86 +1,93 @@
 package com.craftstats.common.mixin;
 
-import com.craftstats.common.stats.BlockStats;
-import com.craftstats.common.stats.MobStats;
-import com.craftstats.common.stats.PlayerStats;
-import com.craftstats.common.stats.StatRegistry;
+import com.craftstats.common.logic.BlockHooks;
+import com.craftstats.common.logic.CombatHooks;
+import com.craftstats.common.logic.ItemHooks;
+import com.craftstats.common.logic.MobBehaviour;
+import com.craftstats.common.stats.*;
 import com.craftstats.common.util.Compat;
+import com.llamalad7.mixinextras.sugar.Local;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.world.damagesource.DamageSource;
-import net.minecraft.world.damagesource.DamageTypes;
+import net.minecraft.world.effect.MobEffectCategory;
 import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(LivingEntity.class)
 public abstract class LivingEntityMixin {
 
+    @Shadow protected boolean dead;
+    @Unique private boolean craftstats$rollingExtraLoot;
+
+    //#if MC >= 1.21.2
+    //$ @Shadow protected abstract void dropFromLootTable(ServerLevel level, DamageSource source, boolean playerKill);
+    //#else
+    @Shadow protected abstract void dropFromLootTable(DamageSource source, boolean playerKill);
+    //#endif
+
     // ---- damage --------------------------------------------------------------------------
 
     //#if MC >= 1.21.2
     //$ @Inject(method = "hurtServer", at = @At("HEAD"), cancellable = true)
-    //$ private void craftstats$blockDamage(ServerLevel level, DamageSource src, float amount, CallbackInfoReturnable<Boolean> cir) {
+    //$ private void craftstats$immunity(ServerLevel level, DamageSource src, float amount, CallbackInfoReturnable<Boolean> cir) {
     //#else
     @Inject(method = "hurt", at = @At("HEAD"), cancellable = true)
-    private void craftstats$blockDamage(DamageSource src, float amount, CallbackInfoReturnable<Boolean> cir) {
+    private void craftstats$immunity(DamageSource src, float amount, CallbackInfoReturnable<Boolean> cir) {
     //#endif
+        if (CombatHooks.isImmune((LivingEntity) (Object) this, src)) cir.setReturnValue(false);
+    }
+
+    //#if MC >= 1.21.2
+    //$ @ModifyVariable(method = "hurtServer", at = @At("HEAD"), argsOnly = true)
+    //#else
+    @ModifyVariable(method = "hurt", at = @At("HEAD"), argsOnly = true)
+    //#endif
+    private float craftstats$damageMultipliers(float amount, @Local(argsOnly = true) DamageSource src) {
         LivingEntity self = (LivingEntity) (Object) this;
-        // /kill and the void always work, so nobody gets stuck falling forever.
-        if (src.is(DamageTypeTags.BYPASSES_INVULNERABILITY)) return;
+        if (self.level().isClientSide()) return amount;
+        return CombatHooks.modifyDamage(self, src, amount);
+    }
+
+    //#if MC >= 1.21.2
+    //$ @Inject(method = "hurtServer", at = @At("RETURN"))
+    //$ private void craftstats$afterHurt(ServerLevel level, DamageSource src, float amount, CallbackInfoReturnable<Boolean> cir) {
+    //#else
+    @Inject(method = "hurt", at = @At("RETURN"))
+    private void craftstats$afterHurt(DamageSource src, float amount, CallbackInfoReturnable<Boolean> cir) {
+    //#endif
+        if (!cir.getReturnValueZ()) return;
+        LivingEntity self = (LivingEntity) (Object) this;
+        if (self.level().isClientSide()) return;
+        // Custom invulnerability window after a player takes damage (vanilla: 20 ticks).
         if (self instanceof Player player) {
             PlayerStats ps = StatRegistry.forPlayer(player);
-            if (ps == null) return;
-            if (ps.godMode
-                    || (ps.drownImmune && src.is(DamageTypes.DROWN))
-                    || (ps.fireImmune && src.is(DamageTypeTags.IS_FIRE))
-                    || (ps.noFallDamage && src.is(DamageTypeTags.IS_FALL))
-                    || (ps.noPoison && craftstats$isPoison(self, src))
-                    || (ps.noMagic && craftstats$isMagic(src)))
+            if (ps != null && ps.invincibilityFrames != 20) player.invulnerableTime = Math.max(0, ps.invincibilityFrames);
+        }
+        CombatHooks.afterHurt(self, src, amount);
+    }
+
+    @Inject(method = "canBeAffected", at = @At("HEAD"), cancellable = true)
+    private void craftstats$effectImmunity(MobEffectInstance effect, CallbackInfoReturnable<Boolean> cir) {
+        LivingEntity self = (LivingEntity) (Object) this;
+        if (self instanceof Player player) {
+            PlayerStats ps = StatRegistry.forPlayer(player);
+            if (ps != null && ps.negativeEffectImmune && effect.getEffect().value().getCategory() == MobEffectCategory.HARMFUL)
                 cir.setReturnValue(false);
         } else {
             MobStats ms = StatRegistry.forEntity(self);
-            if (ms == null) return;
-            if (ms.invincible
-                    || (ms.immuneDrown && src.is(DamageTypes.DROWN))
-                    || (ms.immuneFire && src.is(DamageTypeTags.IS_FIRE))
-                    || (ms.immuneFall && src.is(DamageTypeTags.IS_FALL))
-                    || (ms.immuneExplosion && src.is(DamageTypeTags.IS_EXPLOSION))
-                    || (ms.immunePoison && craftstats$isPoison(self, src))
-                    || (ms.immuneMagic && craftstats$isMagic(src)))
-                cir.setReturnValue(false);
+            if (ms != null && ms.immuneEffects) cir.setReturnValue(false);
         }
-    }
-
-    /** Custom invulnerability window after a player takes damage (vanilla: 20 ticks). */
-    //#if MC >= 1.21.2
-    //$ @Inject(method = "hurtServer", at = @At("RETURN"))
-    //$ private void craftstats$invulnerability(ServerLevel level, DamageSource src, float amount, CallbackInfoReturnable<Boolean> cir) {
-    //#else
-    @Inject(method = "hurt", at = @At("RETURN"))
-    private void craftstats$invulnerability(DamageSource src, float amount, CallbackInfoReturnable<Boolean> cir) {
-    //#endif
-        if (!cir.getReturnValueZ() || !((Object) this instanceof Player player)) return;
-        PlayerStats ps = StatRegistry.forPlayer(player);
-        if (ps != null && ps.invincibilityFrames != 20) player.invulnerableTime = Math.max(0, ps.invincibilityFrames);
-    }
-
-    private static boolean craftstats$isPoison(LivingEntity self, DamageSource src) {
-        return src.is(DamageTypes.MAGIC) && self.hasEffect(MobEffects.POISON);
-    }
-
-    private static boolean craftstats$isMagic(DamageSource src) {
-        return src.is(DamageTypes.MAGIC) || src.is(DamageTypes.INDIRECT_MAGIC) || src.is(DamageTypes.WITHER)
-                || src.is(DamageTypeTags.WITCH_RESISTANT_TO);
     }
 
     //#if MC >= 1.21.11
@@ -100,71 +107,114 @@ public abstract class LivingEntityMixin {
         }
     }
 
-    // ---- per-tick effects --------------------------------------------------------------
+    /** World-wide fall damage multiplier (the float argument after the distance). */
+    //#if MC >= 1.21.11
+    //$ @ModifyVariable(method = "causeFallDamage", at = @At("HEAD"), argsOnly = true, ordinal = 0)
+    //#else
+    @ModifyVariable(method = "causeFallDamage", at = @At("HEAD"), argsOnly = true, ordinal = 1)
+    //#endif
+    private float craftstats$worldFallDamage(float multiplier) {
+        WorldStats w = StatRegistry.world();
+        return w != null && w.fallDamageMultiplier != null ? (float) (multiplier * w.fallDamageMultiplier) : multiplier;
+    }
+
+    // ---- per-tick ------------------------------------------------------------------------
 
     @Inject(method = "tick", at = @At("TAIL"))
     private void craftstats$tick(CallbackInfo ci) {
         LivingEntity self = (LivingEntity) (Object) this;
-        if (self.level().isClientSide()) return;
+        if (self.level().isClientSide()) {
+            // Player movement is simulated by the player's own client.
+            if (self instanceof Player p && p.isLocalPlayer() && StatRegistry.hasBlockOverrides()) BlockHooks.entityTick(self);
+            return;
+        }
 
-        if (!(self instanceof Player)) {
+        if (self instanceof Player player) {
+            PlayerStats ps = StatRegistry.forPlayer(player);
+            if (ps != null) MobBehaviour.tickPlayer(player, ps);
+        } else {
             MobStats ms = StatRegistry.forEntity(self);
-            if (ms != null && ms.burnsDaylight && self.tickCount % 40 == 0 && !self.isOnFire() && !self.isInWater()
-                    && Compat.isDaytime(self.level()) && !self.level().isRaining()
-                    && self.level().canSeeSky(self.blockPosition())) {
-                self.igniteForSeconds(8);
+            if (ms != null) {
+                if (ms.burnsDaylight && self.tickCount % 40 == 0 && !self.isOnFire() && !self.isInWater()
+                        && Compat.isDaytime(self.level()) && !self.level().isRaining()
+                        && self.level().canSeeSky(self.blockPosition()))
+                    self.igniteForSeconds(8);
+                MobBehaviour.tick(self, ms);
             }
         }
-
-        if (!StatRegistry.hasBlockOverrides() || !self.onGround()) return;
-        BlockPos below = self.blockPosition().below();
-        BlockStats bs = StatRegistry.forBlockAt(self.level().getBlockState(below).getBlock(), self.level(), below);
-        if (bs == null || !bs.hasStepEffects()) return;
-
-        if (bs.stepDamage > 0 && self.tickCount % 10 == 0)
-            Compat.hurt(self, self.damageSources().generic(), bs.stepDamage);
-
-        if (bs.speedModifier > 0 && bs.speedModifier != 1.0f) {
-            int amplifier = Math.round(bs.speedModifier * 10) - 10;
-            if (amplifier > 0)
-                self.addEffect(new MobEffectInstance(Compat.SPEED, 25, amplifier - 1, false, false));
-            else if (amplifier < 0)
-                self.addEffect(new MobEffectInstance(Compat.SLOWNESS, 25, Math.min(9, -amplifier - 1), false, false));
-        }
-        if (bs.levitate)
-            self.addEffect(new MobEffectInstance(MobEffects.LEVITATION, 25, 0, false, false));
-        if (bs.glowOnStep)
-            self.addEffect(new MobEffectInstance(MobEffects.GLOWING, 60, 0, false, false));
-        if (bs.freezeOnStep) {
-            self.addEffect(new MobEffectInstance(Compat.SLOWNESS, 25, 3, false, false));
-            self.setTicksFrozen(Math.min(self.getTicksFrozen() + 3, self.getTicksRequiredToFreeze() + 10));
-        }
-        if (!bs.onStepPotion.isEmpty()) {
-            ResourceLocation id = ResourceLocation.tryParse(bs.onStepPotion.trim());
-            if (id != null) Compat.effect(id).ifPresent(holder -> {
-                MobEffectInstance current = self.getEffect(holder);
-                if (current == null || current.getDuration() < 20)
-                    self.addEffect(new MobEffectInstance(holder, Math.max(25, bs.onStepPotionDuration),
-                            Math.max(0, bs.onStepPotionLevel - 1), false, true));
-            });
-        }
+        if (StatRegistry.hasBlockOverrides()) BlockHooks.entityTick(self);
     }
 
-    // ---- drops & misc ------------------------------------------------------------------
+    // ---- death & drops -------------------------------------------------------------------
+
+    @Inject(method = "die", at = @At("HEAD"))
+    private void craftstats$death(DamageSource source, CallbackInfo ci) {
+        LivingEntity self = (LivingEntity) (Object) this;
+        if (!self.level().isClientSide() && !self.isRemoved() && !this.dead) MobBehaviour.onDeath(self);
+    }
 
     @Inject(method = "getExperienceReward", at = @At("HEAD"), cancellable = true)
     private void craftstats$xpReward(ServerLevel level, Entity killer, CallbackInfoReturnable<Integer> cir) {
-        MobStats ms = StatRegistry.forEntity((LivingEntity) (Object) this);
+        LivingEntity self = (LivingEntity) (Object) this;
+        if (self instanceof Player player) {
+            PlayerStats ps = StatRegistry.forPlayer(player);
+            if (ps != null && ps.keepXp) cir.setReturnValue(0); // kept on respawn instead (ServerPlayerMixin)
+            return;
+        }
+        MobStats ms = StatRegistry.forEntity(self);
         if (ms != null && ms.xpReward != null) cir.setReturnValue(Math.max(0, ms.xpReward));
     }
 
-    /** Keep Inventory: nothing is dropped; the inventory is copied over on respawn (ServerPlayerMixin). */
+    /**
+     * Keep Inventory and soulbound items for players (given back in ServerPlayerMixin);
+     * No Drops for mobs.
+     */
     @Inject(method = "dropAllDeathLoot", at = @At("HEAD"), cancellable = true)
-    private void craftstats$keepInventory(ServerLevel level, DamageSource source, CallbackInfo ci) {
-        if ((Object) this instanceof Player player) {
+    private void craftstats$deathLoot(ServerLevel level, DamageSource source, CallbackInfo ci) {
+        LivingEntity self = (LivingEntity) (Object) this;
+        if (self instanceof Player player) {
             PlayerStats ps = StatRegistry.forPlayer(player);
-            if (ps != null && ps.keepInventory) ci.cancel();
+            if (ps != null && ps.keepInventory) { ci.cancel(); return; }
+            ItemHooks.stashSoulbound(player);
+            return;
         }
+        MobStats ms = StatRegistry.forEntity(self);
+        if (ms != null && ms.noDrops) ci.cancel();
+    }
+
+    //#if MC >= 1.21.2
+    //$ @Inject(method = "dropFromLootTable(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/damagesource/DamageSource;Z)V", at = @At("TAIL"))
+    //$ private void craftstats$extraLoot(ServerLevel level, DamageSource source, boolean playerKill, CallbackInfo ci) {
+    //#else
+    @Inject(method = "dropFromLootTable", at = @At("TAIL"))
+    private void craftstats$extraLoot(DamageSource source, boolean playerKill, CallbackInfo ci) {
+    //#endif
+        if (craftstats$rollingExtraLoot) return;
+        LivingEntity self = (LivingEntity) (Object) this;
+        if (self instanceof Player) return;
+        MobStats ms = StatRegistry.forEntity(self);
+        if (ms == null || ms.extraLootRolls == null || ms.extraLootRolls <= 0) return;
+        craftstats$rollingExtraLoot = true;
+        try {
+            for (int i = 0; i < Math.min(32, ms.extraLootRolls); i++)
+                //#if MC >= 1.21.2
+                //$ dropFromLootTable(level, source, playerKill);
+                //#else
+                dropFromLootTable(source, playerKill);
+                //#endif
+        } finally {
+            craftstats$rollingExtraLoot = false;
+        }
+    }
+
+    // ---- misc ----------------------------------------------------------------------------
+
+    @Inject(method = "isPushable", at = @At("HEAD"), cancellable = true)
+    private void craftstats$noPush(CallbackInfoReturnable<Boolean> cir) {
+        LivingEntity self = (LivingEntity) (Object) this;
+        if (self instanceof Player) return;
+        MobStats ms = StatRegistry.forEntity(self);
+        if (ms != null && ms.noPush) cir.setReturnValue(false);
     }
 
     @Inject(method = "onClimbable", at = @At("HEAD"), cancellable = true)

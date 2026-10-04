@@ -48,14 +48,31 @@ public final class ClientHooks {
 
     // ---- sync ------------------------------------------------------------------------------
 
+    private static int lastRenderHash;
+
     public static void onSync(byte[] data) {
         // The local host shares its registry with the integrated server already.
-        if (isLocalHost()) return;
-        try {
-            StatPersistence.restore(JsonParser.parseString(CraftStatsNetwork.decodeSnapshot(data)).getAsJsonObject());
-        } catch (Exception e) {
-            CraftStats.LOGGER.error("CraftStats: could not read stats sent by the server", e);
+        if (!isLocalHost()) {
+            try {
+                StatPersistence.restore(JsonParser.parseString(CraftStatsNetwork.decodeSnapshot(data)).getAsJsonObject());
+            } catch (Exception e) {
+                CraftStats.LOGGER.error("CraftStats: could not read stats sent by the server", e);
+            }
         }
+        // Invisible blocks and light levels only show after the chunks are drawn again.
+        int hash = renderHash();
+        if (hash != lastRenderHash) {
+            lastRenderHash = hash;
+            if (Minecraft.getInstance().level != null) Minecraft.getInstance().levelRenderer.allChanged();
+        }
+    }
+
+    private static int renderHash() {
+        int h = 1;
+        for (var e : StatRegistry.allBlocks().entrySet())
+            if (e.getValue().invisible || e.getValue().lightEmission != null)
+                h = 31 * h + (e.getKey().hashCode() ^ (e.getValue().invisible ? 1 : 0) ^ java.util.Objects.hashCode(e.getValue().lightEmission));
+        return h;
     }
 
     public static void onDisconnect() {

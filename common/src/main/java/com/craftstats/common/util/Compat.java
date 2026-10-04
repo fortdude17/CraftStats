@@ -30,15 +30,19 @@ public final class Compat {
     private Compat() {}
 
     //#if MC >= 1.21.5
-    //$ public static final Holder<MobEffect> SPEED    = MobEffects.SPEED;
-    //$ public static final Holder<MobEffect> SLOWNESS = MobEffects.SLOWNESS;
-    //$ public static final Holder<MobEffect> HASTE    = MobEffects.HASTE;
-    //$ public static final Holder<MobEffect> STRENGTH = MobEffects.STRENGTH;
+    //$ public static final Holder<MobEffect> SPEED      = MobEffects.SPEED;
+    //$ public static final Holder<MobEffect> SLOWNESS   = MobEffects.SLOWNESS;
+    //$ public static final Holder<MobEffect> HASTE      = MobEffects.HASTE;
+    //$ public static final Holder<MobEffect> STRENGTH   = MobEffects.STRENGTH;
+    //$ public static final Holder<MobEffect> JUMP_BOOST = MobEffects.JUMP_BOOST;
+    //$ public static final Holder<MobEffect> RESISTANCE = MobEffects.RESISTANCE;
     //#else
-    public static final Holder<MobEffect> SPEED    = MobEffects.MOVEMENT_SPEED;
-    public static final Holder<MobEffect> SLOWNESS = MobEffects.MOVEMENT_SLOWDOWN;
-    public static final Holder<MobEffect> HASTE    = MobEffects.DIG_SPEED;
-    public static final Holder<MobEffect> STRENGTH = MobEffects.DAMAGE_BOOST;
+    public static final Holder<MobEffect> SPEED      = MobEffects.MOVEMENT_SPEED;
+    public static final Holder<MobEffect> SLOWNESS   = MobEffects.MOVEMENT_SLOWDOWN;
+    public static final Holder<MobEffect> HASTE      = MobEffects.DIG_SPEED;
+    public static final Holder<MobEffect> STRENGTH   = MobEffects.DAMAGE_BOOST;
+    public static final Holder<MobEffect> JUMP_BOOST = MobEffects.JUMP;
+    public static final Holder<MobEffect> RESISTANCE = MobEffects.DAMAGE_RESISTANCE;
     //#endif
 
     public static Optional<Holder<MobEffect>> effect(ResourceLocation id) {
@@ -80,6 +84,24 @@ public final class Compat {
         //$ return type.create(level, net.minecraft.world.entity.EntitySpawnReason.TRIGGERED);
         //#else
         return type.create(level);
+        //#endif
+    }
+
+    /** Lowest block y of a level. */
+    public static int minY(net.minecraft.world.level.LevelHeightAccessor level) {
+        //#if MC >= 1.21.2
+        //$ return level.getMinY();
+        //#else
+        return level.getMinBuildHeight();
+        //#endif
+    }
+
+    /** Highest block y of a level (inclusive). */
+    public static int maxY(net.minecraft.world.level.LevelHeightAccessor level) {
+        //#if MC >= 1.21.2
+        //$ return level.getMaxY();
+        //#else
+        return level.getMaxBuildHeight() - 1;
         //#endif
     }
 
@@ -129,6 +151,15 @@ public final class Compat {
         //$ if (target.level() instanceof ServerLevel level) target.hurtServer(level, source, amount);
         //#else
         target.hurt(source, amount);
+        //#endif
+    }
+
+    /** Like {@link #hurt}, returning whether the damage was applied. */
+    public static boolean hurtAndCheck(Entity target, DamageSource source, float amount) {
+        //#if MC >= 1.21.2
+        //$ return target.level() instanceof ServerLevel level && target.hurtServer(level, source, amount);
+        //#else
+        return target.hurt(source, amount);
         //#endif
     }
 

@@ -60,7 +60,7 @@ public class ConfigScreen extends BaseScreen {
     }
 
     private Component intensityLabel() {
-        return Component.literal("Randomize: " + cfg.randomizeIntensity);
+        return Component.literal("Random intensity: " + cfg.randomizeIntensity);
     }
 
     private void toggle(int x, int y, int w, String label, BooleanSupplier get, Consumer<Boolean> set) {

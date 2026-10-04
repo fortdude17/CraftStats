@@ -2,6 +2,10 @@ package com.craftstats.common.stats;
 
 import com.craftstats.common.util.Compat;
 import net.minecraft.core.Holder;
+import net.minecraft.core.HolderSet;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.Rarity;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.core.component.DataComponentType;
@@ -11,6 +15,7 @@ import net.minecraft.util.Unit;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.EquipmentSlotGroup;
+import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.food.FoodProperties;
@@ -24,6 +29,7 @@ import net.minecraft.world.item.component.Tool;
 //$ import net.minecraft.world.item.component.DamageResistant;
 //$ import net.minecraft.world.item.consume_effects.ApplyStatusEffectsConsumeEffect;
 //$ import net.minecraft.world.item.enchantment.Enchantable;
+//$ import net.minecraft.world.item.enchantment.Repairable;
 //#else
 import net.minecraft.world.item.component.Unbreakable;
 //#endif
@@ -88,8 +94,23 @@ public final class ItemOverrides {
             v.put(DataComponents.MAX_STACK_SIZE, Math.max(1, Math.min(99, s.stackSize)));
         }
 
-        if (s.attackDamage != null || s.attackSpeed != null)
-            v.put(DataComponents.ATTRIBUTE_MODIFIERS, attackModifiers(base, s));
+        if (s.attackDamage != null || s.attackSpeed != null || s.hasBonuses())
+            v.put(DataComponents.ATTRIBUTE_MODIFIERS, attributeModifiers(base, s));
+
+        if (s.rarity != null && !ItemStats.RARITY_VANILLA.equals(s.rarity)) {
+            try {
+                v.put(DataComponents.RARITY, Rarity.valueOf(s.rarity.toUpperCase(java.util.Locale.ROOT)));
+            } catch (IllegalArgumentException ignored) {}
+        }
+        if (s.displayName != null && !s.displayName.isBlank())
+            v.put(DataComponents.ITEM_NAME, Component.literal(s.displayName.trim()));
+
+        //#if MC >= 1.21.2
+        //$ ResourceLocation repairId = s.repairMaterial == null ? null : ResourceLocation.tryParse(s.repairMaterial.trim());
+        //$ if (repairId != null && !s.repairMaterial.isBlank() && BuiltInRegistries.ITEM.containsKey(repairId))
+        //$     v.put(DataComponents.REPAIRABLE, new Repairable(HolderSet.direct(
+        //$             BuiltInRegistries.ITEM.wrapAsHolder(Compat.registryValue(BuiltInRegistries.ITEM, repairId)))));
+        //#endif
 
         if (s.miningSpeed != null)
             v.put(DataComponents.TOOL, tool(base.get(DataComponents.TOOL), Math.max(0f, s.miningSpeed)));
@@ -115,6 +136,51 @@ public final class ItemOverrides {
         if (s.changesFood()) food(base, s, v, removed);
 
         return new Overrides(Map.copyOf(v), Set.copyOf(removed));
+    }
+
+    /** Bonus stat -> attribute, for the "Bonuses" category. */
+    private static final List<Map.Entry<java.util.function.Function<ItemStats, Double>, Holder<Attribute>>> BONUSES = List.of(
+            Map.entry(st -> st.bonusMaxHealth, Attributes.MAX_HEALTH),
+            Map.entry(st -> st.bonusArmor, Attributes.ARMOR),
+            Map.entry(st -> st.bonusArmorToughness, Attributes.ARMOR_TOUGHNESS),
+            Map.entry(st -> st.bonusKnockbackResist, Attributes.KNOCKBACK_RESISTANCE),
+            Map.entry(st -> st.bonusMoveSpeed, Attributes.MOVEMENT_SPEED),
+            Map.entry(st -> st.bonusJump, Attributes.JUMP_STRENGTH),
+            Map.entry(st -> st.bonusStepHeight, Attributes.STEP_HEIGHT),
+            Map.entry(st -> st.bonusGravity, Attributes.GRAVITY),
+            Map.entry(st -> st.bonusScale, Attributes.SCALE),
+            Map.entry(st -> st.bonusBlockReach, Attributes.BLOCK_INTERACTION_RANGE),
+            Map.entry(st -> st.bonusEntityReach, Attributes.ENTITY_INTERACTION_RANGE),
+            Map.entry(st -> st.bonusLuck, Attributes.LUCK),
+            Map.entry(st -> st.bonusSafeFall, Attributes.SAFE_FALL_DISTANCE),
+            Map.entry(st -> st.bonusMiningEfficiency, Attributes.MINING_EFFICIENCY),
+            Map.entry(st -> st.bonusAttackKnockback, Attributes.ATTACK_KNOCKBACK),
+            Map.entry(st -> st.bonusSweeping, Attributes.SWEEPING_DAMAGE_RATIO),
+            Map.entry(st -> st.bonusOxygen, Attributes.OXYGEN_BONUS));
+
+    private static EquipmentSlotGroup bonusSlot(ItemStats s) {
+        return switch (s.bonusSlot == null ? "" : s.bonusSlot) {
+            case "offhand" -> EquipmentSlotGroup.OFFHAND;
+            case "hand" -> EquipmentSlotGroup.HAND;
+            case "armor" -> EquipmentSlotGroup.ARMOR;
+            case "any" -> EquipmentSlotGroup.ANY;
+            default -> EquipmentSlotGroup.MAINHAND;
+        };
+    }
+
+    private static ItemAttributeModifiers attributeModifiers(DataComponentMap base, ItemStats s) {
+        ItemAttributeModifiers.Builder b = ItemAttributeModifiers.builder();
+        for (ItemAttributeModifiers.Entry e : attackModifiers(base, s).modifiers()) b.add(e.attribute(), e.modifier(), e.slot());
+        EquipmentSlotGroup slot = bonusSlot(s);
+        int i = 0;
+        for (var bonus : BONUSES) {
+            Double amount = bonus.getKey().apply(s);
+            i++;
+            if (amount == null || amount == 0) continue;
+            ResourceLocation id = ResourceLocation.fromNamespaceAndPath("craftstats", "bonus_" + i);
+            b.add(bonus.getValue(), new AttributeModifier(id, amount, AttributeModifier.Operation.ADD_VALUE), slot);
+        }
+        return b.build();
     }
 
     private static ItemAttributeModifiers attackModifiers(DataComponentMap base, ItemStats s) {
@@ -155,7 +221,9 @@ public final class ItemOverrides {
         if (s.onEatEffect == null || s.onEatEffect.isBlank()) return Optional.empty();
         ResourceLocation id = ResourceLocation.tryParse(s.onEatEffect.trim());
         if (id == null) return Optional.empty();
-        return Compat.effect(id).map(h -> new MobEffectInstance(h, 30 * 20, 0));
+        int seconds = s.onEatEffectSeconds != null ? Math.max(1, s.onEatEffectSeconds) : 30;
+        int amp = s.onEatEffectLevel != null ? Math.max(0, Math.min(255, s.onEatEffectLevel - 1)) : 0;
+        return Compat.effect(id).map(h -> new MobEffectInstance(h, seconds * 20, amp));
     }
 
     private static void food(DataComponentMap base, ItemStats s, Map<DataComponentType<?>, Object> v,

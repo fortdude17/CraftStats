@@ -31,6 +31,9 @@ public final class StatApplier {
 
     private static final ResourceLocation MODIFIER_ID =
             ResourceLocation.fromNamespaceAndPath(CraftStats.MOD_ID, "override");
+    /** World-wide multipliers (mob health and speed), on top of the per-mob values. */
+    private static final ResourceLocation WORLD_ID =
+            ResourceLocation.fromNamespaceAndPath(CraftStats.MOD_ID, "world");
 
     private static final PlayerStats VANILLA_PLAYER = new PlayerStats();
 
@@ -46,7 +49,7 @@ public final class StatApplier {
             Attributes.ARMOR, Attributes.ARMOR_TOUGHNESS, Attributes.KNOCKBACK_RESISTANCE,
             Attributes.MAX_ABSORPTION, Attributes.LUCK, Attributes.BURNING_TIME,
             Attributes.FALL_DAMAGE_MULTIPLIER, Attributes.SAFE_FALL_DISTANCE,
-            Attributes.EXPLOSION_KNOCKBACK_RESISTANCE);
+            Attributes.EXPLOSION_KNOCKBACK_RESISTANCE, Attributes.SCALE, Attributes.BLOCK_BREAK_SPEED);
 
     private StatApplier() {}
 
@@ -57,18 +60,29 @@ public final class StatApplier {
         MobStats s = StatRegistry.forEntity(e);
         boolean wasFullHealth = e.getHealth() >= e.getMaxHealth() - 1.0E-4f;
 
-        set(e, Attributes.MAX_HEALTH,           s == null ? null : s.maxHealth);
-        set(e, Attributes.ATTACK_DAMAGE,        s == null ? null : s.attackDamage);
-        set(e, Attributes.ARMOR,                s == null ? null : s.armor);
-        set(e, Attributes.KNOCKBACK_RESISTANCE, s == null ? null : s.knockbackResist);
-        set(e, Attributes.MOVEMENT_SPEED,       s == null ? null : s.moveSpeed);
-        set(e, Attributes.JUMP_STRENGTH,        s == null ? null : s.jumpForce);
-        set(e, Attributes.FOLLOW_RANGE,         s == null ? null : s.followRange);
-        Double scale = s == null || s.sizeScale == null ? null
-                : Math.min(s.sizeScale, CraftStatsConfig.get().maxScaleCap);
-        set(e, Attributes.SCALE, scale);
+        for (MobAttributes.Link link : MobAttributes.LINKS) {
+            Double value = s == null ? null : (Double) StatAccess.get(s, link.field());
+            if (value != null && link.attribute() == Attributes.SCALE)
+                value = Math.min(value, CraftStatsConfig.get().maxScaleCap);
+            set(e, link.attribute(), value);
+        }
+        WorldStats w = StatRegistry.world();
+        multiply(e, Attributes.MAX_HEALTH, w == null ? null : w.mobHealthMultiplier);
+        multiply(e, Attributes.MOVEMENT_SPEED, w == null ? null : w.mobSpeedMultiplier);
 
         if (wasFullHealth || e.getHealth() > e.getMaxHealth()) e.setHealth(e.getMaxHealth());
+        if (s != null && s.absorption != null && s.absorption > 0 && wasFullHealth)
+            e.setAbsorptionAmount((float) Math.min(s.absorption, e.getMaxAbsorption()));
+        com.craftstats.common.logic.MobBehaviour.updateGoals(e);
+    }
+
+    /** A world-wide multiplier as a separate modifier (null or 1 = none). */
+    private static void multiply(LivingEntity e, Holder<Attribute> attr, Double factor) {
+        AttributeInstance inst = e.getAttribute(attr);
+        if (inst == null) return;
+        inst.removeModifier(WORLD_ID);
+        if (factor == null || factor.isNaN() || factor == 1.0) return;
+        inst.addTransientModifier(new AttributeModifier(WORLD_ID, factor - 1.0, AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL));
     }
 
     /** Re-applies overrides to every loaded mob of a type (or all mobs when typeId is null). */
@@ -112,7 +126,9 @@ public final class StatApplier {
         set(p, Attributes.MOVEMENT_EFFICIENCY,           target(s, v.movementEfficiency));
         set(p, Attributes.SUBMERGED_MINING_SPEED,        target(s, v.submergedMiningSpeed));
         set(p, Attributes.WATER_MOVEMENT_EFFICIENCY,     target(s, v.waterMovementEfficiency));
-        set(p, Attributes.OXYGEN_BONUS,                  s != null && s.drownImmune ? 1024.0 : null);
+        set(p, Attributes.OXYGEN_BONUS,                  s == null ? null : s.drownImmune ? 1024.0 : v.oxygenBonus);
+        set(p, Attributes.SCALE,                         target(s, Math.min(v.size, CraftStatsConfig.get().maxScaleCap)));
+        set(p, Attributes.BLOCK_BREAK_SPEED,             target(s, v.blockBreakSpeed));
         set(p, Attributes.ARMOR,                         target(s, v.armor));
         set(p, Attributes.ARMOR_TOUGHNESS,               target(s, v.armorToughness));
         set(p, Attributes.KNOCKBACK_RESISTANCE,          target(s, v.knockbackResistance));

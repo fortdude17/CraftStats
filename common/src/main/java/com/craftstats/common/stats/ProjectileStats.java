@@ -35,7 +35,8 @@ public class ProjectileStats implements HitEffects {
     @Override public Integer hitEffectLevel()   { return hitEffectLevel; }
     @Override public Integer hitEffectSeconds() { return hitEffectSeconds; }
     @Override public Double  lifestealPercent() { return null; }
-    @Override public boolean lightningOnHit()   { return lightningOnHit; }
+    /** Lightning is handled for every kind of hit by ProjectileHooks, not per damaged entity. */
+    @Override public boolean lightningOnHit()   { return false; }
 
     public ProjectileStats copy() { return StatSchema.copy(this, ProjectileStats.class); }
 }

@@ -74,7 +74,7 @@ public class StatRow {
                 out.add(button);
             }
         }
-        reset = Button.builder(Component.literal("↺"), b -> resetToDefault()).bounds(0, 0, RESET_W, WIDGET_H)
+        reset = Button.builder(Component.literal("x"), b -> resetToDefault()).bounds(0, 0, RESET_W, WIDGET_H)
                 .tooltip(Tooltip.create(Component.literal("Back to default"))).build();
         out.add(reset);
         if (!supported) for (AbstractWidget wd : out) wd.active = false;

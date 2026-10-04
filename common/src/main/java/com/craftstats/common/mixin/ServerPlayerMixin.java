@@ -1,5 +1,6 @@
 package com.craftstats.common.mixin;
 
+import com.craftstats.common.logic.ItemHooks;
 import com.craftstats.common.stats.PlayerStats;
 import com.craftstats.common.stats.StatRegistry;
 import net.minecraft.server.level.ServerPlayer;
@@ -18,12 +19,15 @@ public abstract class ServerPlayerMixin {
     @Inject(method = "restoreFrom", at = @At("TAIL"))
     private void craftstats$keepInventory(ServerPlayer old, boolean keepEverything, CallbackInfo ci) {
         if (keepEverything) return;
-        PlayerStats ps = StatRegistry.forPlayer(old);
-        if (ps == null || !ps.keepInventory) return;
         ServerPlayer self = (ServerPlayer) (Object) this;
-        self.getInventory().replaceWith(old.getInventory());
-        self.experienceLevel = old.experienceLevel;
-        self.totalExperience = old.totalExperience;
-        self.experienceProgress = old.experienceProgress;
+        ItemHooks.restoreSoulbound(self);
+        PlayerStats ps = StatRegistry.forPlayer(old);
+        if (ps == null) return;
+        if (ps.keepInventory) self.getInventory().replaceWith(old.getInventory());
+        if (ps.keepInventory || ps.keepXp) {
+            self.experienceLevel = old.experienceLevel;
+            self.totalExperience = old.totalExperience;
+            self.experienceProgress = old.experienceProgress;
+        }
     }
 }

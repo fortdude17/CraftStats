@@ -27,6 +27,11 @@ import net.minecraft.world.level.LevelAccessor;
 //#endif
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.item.context.BlockPlaceContext;
+import net.minecraft.world.level.block.RenderShape;
+import net.minecraft.world.level.block.SoundType;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
@@ -90,6 +95,91 @@ public abstract class BlockBehaviourStateMixin {
         if (s == null || s.dropXp == null) return dropExperience;
         if (dropExperience && s.dropXp > 0) ExperienceOrb.award(level, Vec3.atCenterOf(pos), s.dropXp);
         return false;
+    }
+
+    // ---- replaceable, redstone, sound, looks, spawning, growth -------------------------
+
+    @Inject(method = "canBeReplaced()Z", at = @At("HEAD"), cancellable = true)
+    private void craftstats$replaceable(CallbackInfoReturnable<Boolean> cir) {
+        BlockStats s = StatRegistry.forBlock(getBlock());
+        if (s != null && s.replaceable) cir.setReturnValue(true);
+    }
+
+    @Inject(method = "canBeReplaced(Lnet/minecraft/world/item/context/BlockPlaceContext;)Z", at = @At("HEAD"), cancellable = true)
+    private void craftstats$replaceableByPlacing(BlockPlaceContext ctx, CallbackInfoReturnable<Boolean> cir) {
+        BlockStats s = StatRegistry.forBlock(getBlock());
+        if (s != null && s.replaceable) cir.setReturnValue(true);
+    }
+
+    @Inject(method = "isSignalSource", at = @At("HEAD"), cancellable = true)
+    private void craftstats$signalSource(CallbackInfoReturnable<Boolean> cir) {
+        BlockStats s = StatRegistry.forBlock(getBlock());
+        if (s != null && s.redstonePower != null && s.redstonePower > 0) cir.setReturnValue(true);
+    }
+
+    @Inject(method = "getSignal", at = @At("HEAD"), cancellable = true)
+    private void craftstats$signal(BlockGetter level, BlockPos pos, Direction dir, CallbackInfoReturnable<Integer> cir) {
+        BlockStats s = StatRegistry.forBlock(getBlock());
+        if (s != null && s.redstonePower != null && s.redstonePower > 0) cir.setReturnValue(Math.min(15, s.redstonePower));
+    }
+
+    @Inject(method = "getSoundType", at = @At("HEAD"), cancellable = true)
+    private void craftstats$sound(CallbackInfoReturnable<SoundType> cir) {
+        BlockStats s = StatRegistry.forBlock(getBlock());
+        if (s == null || s.soundType == null) return;
+        SoundType t = switch (s.soundType) {
+            case "stone" -> SoundType.STONE;
+            case "wood" -> SoundType.WOOD;
+            case "grass" -> SoundType.GRASS;
+            case "gravel" -> SoundType.GRAVEL;
+            case "sand" -> SoundType.SAND;
+            case "snow" -> SoundType.SNOW;
+            case "wool" -> SoundType.WOOL;
+            case "glass" -> SoundType.GLASS;
+            case "metal" -> SoundType.METAL;
+            case "slime" -> SoundType.SLIME_BLOCK;
+            case "honey" -> SoundType.HONEY_BLOCK;
+            case "amethyst" -> SoundType.AMETHYST;
+            case "bone" -> SoundType.BONE_BLOCK;
+            case "netherrack" -> SoundType.NETHERRACK;
+            default -> null;
+        };
+        if (t != null) cir.setReturnValue(t);
+    }
+
+    @Inject(method = "getRenderShape", at = @At("HEAD"), cancellable = true)
+    private void craftstats$invisible(CallbackInfoReturnable<RenderShape> cir) {
+        BlockStats s = StatRegistry.forBlock(getBlock());
+        if (s != null && s.invisible) cir.setReturnValue(RenderShape.INVISIBLE);
+    }
+
+    @Inject(method = "isValidSpawn", at = @At("HEAD"), cancellable = true)
+    private void craftstats$mobSpawning(BlockGetter level, BlockPos pos, EntityType<?> type, CallbackInfoReturnable<Boolean> cir) {
+        BlockStats s = StatRegistry.forBlockAt(getBlock(), level, pos);
+        if (s == null || s.mobSpawning == null) return;
+        if (s.mobSpawning.equals("always")) cir.setReturnValue(true);
+        else if (s.mobSpawning.equals("never")) cir.setReturnValue(false);
+    }
+
+    @Unique private static final ThreadLocal<Boolean> craftstats$extraTicks = ThreadLocal.withInitial(() -> false);
+
+    /** Growth speed: random ticks (crop growth, saplings, ice melting...) happen n times as often. */
+    @Inject(method = "randomTick", at = @At("HEAD"), cancellable = true)
+    private void craftstats$growthSpeed(ServerLevel level, BlockPos pos, RandomSource random, CallbackInfo ci) {
+        if (craftstats$extraTicks.get()) return;
+        BlockStats s = StatRegistry.forBlock(getBlock());
+        if (s == null || s.randomTickMultiplier == null || s.randomTickMultiplier == 1) return;
+        if (s.randomTickMultiplier <= 0) { ci.cancel(); return; }
+        craftstats$extraTicks.set(true);
+        try {
+            BlockState self = (BlockState) (Object) this;
+            for (int i = 1; i < Math.min(64, s.randomTickMultiplier); i++) {
+                if (level.getBlockState(pos) != self) break; // it grew or changed
+                self.randomTick(level, pos, random);
+            }
+        } finally {
+            craftstats$extraTicks.set(false);
+        }
     }
 
     // ---- "Can Fall": behave like sand -------------------------------------------------

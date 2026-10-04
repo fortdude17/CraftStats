@@ -125,11 +125,7 @@ public class StatRow {
     }
 
     private Object defaultsHolder() {
-        try {
-            return target.getClass().getConstructor().newInstance();
-        } catch (ReflectiveOperationException e) {
-            return target;
-        }
+        return StatAccess.defaults(target.getClass());
     }
 
     private String hint() {

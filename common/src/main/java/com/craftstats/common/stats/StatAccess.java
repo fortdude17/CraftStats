@@ -85,10 +85,23 @@ public final class StatAccess {
         }
     }
 
+    private static final Map<Class<?>, Object> DEFAULTS = new ConcurrentHashMap<>();
+
+    /** A shared, never-modified instance with the default ("unchanged") values of a stats class. */
+    public static Object defaults(Class<?> type) {
+        return DEFAULTS.computeIfAbsent(type, t -> {
+            try {
+                return t.getConstructor().newInstance();
+            } catch (ReflectiveOperationException e) {
+                throw new IllegalStateException(e);
+            }
+        });
+    }
+
     /** Number of stats that differ from a fresh (unmodified) object. */
     public static int countChanged(TargetType type, Object stats, Iterable<StatDef> defs) {
         if (stats == null) return 0;
-        Object fresh = StatSchema.empty(type);
+        Object fresh = defaults(stats.getClass());
         int n = 0;
         for (StatDef def : defs) {
             Object a = get(stats, def.field()), b = get(fresh, def.field());

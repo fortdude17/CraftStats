@@ -144,9 +144,9 @@ public final class SmokeTest {
         }
     }
 
-    interface Check { void run() throws Exception; }
+    public interface Check { void run() throws Exception; }
 
-    static void step(List<String> failures, String name, Check check) {
+    public static void step(List<String> failures, String name, Check check) {
         try {
             check.run();
             CraftStats.LOGGER.info("smoke test: {} ok", name);
@@ -156,7 +156,7 @@ public final class SmokeTest {
         }
     }
 
-    static void check(boolean condition, String message) {
+    public static void check(boolean condition, String message) {
         if (!condition) throw new AssertionError(message);
     }
 

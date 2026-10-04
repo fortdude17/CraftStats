@@ -12,6 +12,9 @@ import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 
+import com.craftstats.common.util.Compat;
+
+import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -31,6 +34,30 @@ public final class StatRegistry {
 
     /** Incremented on every change; used to invalidate caches derived from the overrides. */
     private static volatile int revision;
+
+    /**
+     * Identity-keyed views of the type maps, rebuilt after changes. Block lookups happen in hot
+     * paths (lighting, collision), so they must not hash ids every call.
+     */
+    private record Caches(int revision, Map<Block, BlockStats> blocks, Map<EntityType<?>, MobStats> mobs,
+                          Map<Item, ItemStats> items) {}
+    private static volatile Caches caches = new Caches(-1, Map.of(), Map.of(), Map.of());
+
+    private static Caches caches() {
+        Caches c = caches;
+        int rev = revision;
+        if (c.revision() == rev) return c;
+        Map<Block, BlockStats> blocks = new IdentityHashMap<>();
+        // Defaulted registries return air/pig for unknown ids, hence the containsKey checks.
+        BLOCKS.forEach((id, s) -> { if (BuiltInRegistries.BLOCK.containsKey(id)) blocks.put(Compat.registryValue(BuiltInRegistries.BLOCK, id), s); });
+        Map<EntityType<?>, MobStats> mobs = new IdentityHashMap<>();
+        MOBS.forEach((id, s) -> { if (BuiltInRegistries.ENTITY_TYPE.containsKey(id)) mobs.put(Compat.registryValue(BuiltInRegistries.ENTITY_TYPE, id), s); });
+        Map<Item, ItemStats> items = new IdentityHashMap<>();
+        ITEMS.forEach((id, s) -> { if (BuiltInRegistries.ITEM.containsKey(id)) items.put(Compat.registryValue(BuiltInRegistries.ITEM, id), s); });
+        c = new Caches(rev, blocks, mobs, items);
+        caches = c;
+        return c;
+    }
 
     private StatRegistry() {}
 
@@ -68,7 +95,7 @@ public final class StatRegistry {
         if (entity instanceof Player) return null;
         if (MOBS.isEmpty() && MOB_INSTANCES.isEmpty()) return null;
         MobStats s = MOB_INSTANCES.isEmpty() ? null : MOB_INSTANCES.get(entity.getUUID());
-        return s != null ? s : MOBS.get(EntityType.getKey(entity.getType()));
+        return s != null || MOBS.isEmpty() ? s : caches().mobs().get(entity.getType());
     }
 
     // ---- blocks ------------------------------------------------------------------------
@@ -86,8 +113,7 @@ public final class StatRegistry {
 
     /** Type-level overrides for a block, or null. */
     public static BlockStats forBlock(Block block) {
-        if (BLOCKS.isEmpty()) return null;
-        return BLOCKS.get(BuiltInRegistries.BLOCK.getKey(block));
+        return BLOCKS.isEmpty() ? null : caches().blocks().get(block);
     }
 
     /**
@@ -111,8 +137,7 @@ public final class StatRegistry {
     public static Map<ResourceLocation, ItemStats> allItems()      { return ITEMS; }
 
     public static ItemStats forItem(Item item) {
-        if (ITEMS.isEmpty()) return null;
-        return ITEMS.get(BuiltInRegistries.ITEM.getKey(item));
+        return ITEMS.isEmpty() ? null : caches().items().get(item);
     }
 
     // ---- players -----------------------------------------------------------------------

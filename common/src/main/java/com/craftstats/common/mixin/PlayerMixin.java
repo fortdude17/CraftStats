@@ -10,6 +10,7 @@ import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
+import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.*;
@@ -22,11 +23,12 @@ public abstract class PlayerMixin {
     @Unique private boolean craftstats$grantedFlight;
 
     /**
-     * No Clip. Vanilla resets noPhysics to isSpectator() at the start of every tick, so it has
-     * to be set again right before movement happens. Runs on both sides because movement is
-     * simulated on the client.
+     * No Clip. Vanilla resets noPhysics to isSpectator() at the start of every tick, so it is
+     * set again right after that. Runs on both sides because movement is simulated on the
+     * client.
      */
-    @Inject(method = "tick", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/LivingEntity;tick()V"))
+    @Inject(method = "tick", at = @At(value = "FIELD", target = "Lnet/minecraft/world/entity/player/Player;noPhysics:Z",
+            opcode = Opcodes.PUTFIELD, shift = At.Shift.AFTER))
     private void craftstats$noClip(CallbackInfo ci) {
         Player self = (Player) (Object) this;
         PlayerStats ps = StatRegistry.forPlayer(self);

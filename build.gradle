@@ -77,6 +77,11 @@ subprojects {
         }
     }
 
+    // ./gradlew :fabric:runServer -PsmokeTest  boots a server that self-tests and exits (see SmokeTest).
+    if (project.hasProperty("smokeTest") && project.name != "common") {
+        loom.runs.configureEach { vmArg("-Dcraftstats.smokeTest=true") }
+    }
+
     // Version-specific resources: src/main/resources-<mc>/ replaces files of the same path.
     def resourceOverlay = file("src/main/resources-${rootProject.minecraft_version}")
     if (resourceOverlay.exists()) {

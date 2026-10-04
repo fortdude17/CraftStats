@@ -44,7 +44,10 @@ public final class CraftStats {
 
         // Load before the levels so mobs in spawn chunks get their overrides.
         LifecycleEvent.SERVER_STARTING.register(StatPersistence::init);
-        LifecycleEvent.SERVER_STARTED.register(server -> StatApplier.refreshMobs(server, null));
+        LifecycleEvent.SERVER_STARTED.register(server -> {
+            StatApplier.refreshMobs(server, null);
+            if (SmokeTest.enabled()) SmokeTest.run(server);
+        });
         LifecycleEvent.SERVER_STOPPING.register(server -> StatPersistence.save());
         LifecycleEvent.SERVER_STOPPED.register(server -> StatPersistence.shutdown());
 

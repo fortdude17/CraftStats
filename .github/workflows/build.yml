@@ -29,6 +29,21 @@ jobs:
           chmod +x gradlew
           ./gradlew build -Pmc=${{ matrix.mc }} --stacktrace
 
+      - name: Smoke test (boot a dedicated server on each loader)
+        run: |
+          for loader in fabric neoforge; do
+            mkdir -p "$loader/run"
+            echo "eula=true" > "$loader/run/eula.txt"
+            printf 'online-mode=false\nlevel-type=minecraft\\:flat\nspawn-protection=0\n' > "$loader/run/server.properties"
+            timeout 900 ./gradlew ":$loader:runServer" -Pmc=${{ matrix.mc }} -PsmokeTest --console=plain > "smoke-$loader.log" 2>&1 || true
+            grep -E "smoke test:|CRAFTSTATS-SMOKE|Mixin apply|InvalidInjection|MixinApplyError|Exception" "smoke-$loader.log" | head -60 || true
+            if ! grep -q "CRAFTSTATS-SMOKE-PASS" "smoke-$loader.log"; then
+              echo "::error::$loader smoke test failed on ${{ matrix.mc }}"
+              tail -150 "smoke-$loader.log"
+              exit 1
+            fi
+          done
+
       - name: Collect jars
         run: |
           mkdir -p dist

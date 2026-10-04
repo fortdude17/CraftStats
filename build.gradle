@@ -77,6 +77,21 @@ subprojects {
         }
     }
 
+    // Version-specific resources: src/main/resources-<mc>/ replaces files of the same path.
+    def resourceOverlay = file("src/main/resources-${rootProject.minecraft_version}")
+    if (resourceOverlay.exists()) {
+        def overlayRoot = resourceOverlay.toPath()
+        def overridden = fileTree(resourceOverlay).files.collect { overlayRoot.relativize(it.toPath()).toString().replace('\\', '/') } as Set
+        processResources {
+            inputs.dir(resourceOverlay)
+            eachFile { details ->
+                if (overridden.contains(details.relativePath.pathString) && !details.file.toPath().startsWith(overlayRoot))
+                    details.exclude()
+            }
+            from(resourceOverlay)
+        }
+    }
+
     // Sources are written for `base_mc`; any other version builds from a preprocessed copy.
     if (rootProject.mc != rootProject.base_mc) {
         def srcDir = file("src/main/java")

@@ -20,7 +20,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.function.Consumer;
 
-public class BlockSourceBrowserScreen extends Screen {
+public class BlockSourceBrowserScreen extends BaseScreen {
 
     private static final int LIST_W    = 200;
     private static final int PREVIEW_W = 220;
@@ -162,7 +162,7 @@ public class BlockSourceBrowserScreen extends Screen {
 
             ResourceLocation id = BuiltInRegistries.BLOCK.getKey(b);
             String name = id.getPath().replace('_', ' ');
-            if (name.length() > 18) name = name.substring(0, 17) + "…";
+            name = font.plainSubstrByWidth(name, LIST_W - 24);
             g.drawString(font, name, listX + 20, rowY + (ROW_H - 8) / 2, sel ? 0xFFFFFFFF : 0xFFCCCCCC, false);
         }
         g.disableScissor();
@@ -197,7 +197,6 @@ public class BlockSourceBrowserScreen extends Screen {
             drawStat(g, px, py, "Step Damage",  preview.stepDamage  > 0 ? "§c" + fmt(preview.stepDamage) : "§7None"); py += lineH;
             drawStat(g, px, py, "Speed",        preview.speedModifier != 1.0f ? "§e" + fmt(preview.speedModifier) + "×" : "§7Normal"); py += lineH;
             drawStat(g, px, py, "Freeze",       preview.freezeOnStep ? "§bYes" : "§7No"); py += lineH;
-            drawStat(g, px, py, "Bounce",       preview.bounceFactor > 0 ? "§d" + fmt(preview.bounceFactor) : "§7No"); py += lineH;
         } else {
             g.drawCenteredString(font, "§7Select a block from the list",
                     prevX + prevW / 2, listY + listH / 2, 0xFFAAAAAA);
@@ -210,7 +209,9 @@ public class BlockSourceBrowserScreen extends Screen {
         g.drawString(font, "§8" + label + ": §f" + value, x, y, 0xFFFFFFFF, false);
     }
 
-    private static String fmt(float v) {
+    private static String fmt(Float boxed) {
+        if (boxed == null) return "-";
+        float v = boxed;
         if (v == Math.floor(v) && Math.abs(v) < 1e6) return String.valueOf((long)v);
         return String.format("%.3f", v).replaceAll("0+$", "").replaceAll("\\.$", "");
     }
@@ -223,9 +224,7 @@ public class BlockSourceBrowserScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(double mx, double my, int btn) {
-        if (super.mouseClicked(mx, my, btn)) return true;
-
+    protected boolean onMouseClicked(double mx, double my, int btn) {
         int listX  = PAD;
         int listY  = PAD + SEARCH_H + 4;
         int footerY= this.height - FOOTER_H - PAD;
@@ -251,18 +250,6 @@ public class BlockSourceBrowserScreen extends Screen {
         return true;
     }
 
-    @Override
-    public boolean keyPressed(int key, int scan, int mods) {
-        if (searchBox.isFocused()) return searchBox.keyPressed(key, scan, mods);
-        return super.keyPressed(key, scan, mods);
-    }
 
-    @Override
-    public boolean charTyped(char c, int mods) {
-        if (searchBox.isFocused()) return searchBox.charTyped(c, mods);
-        return super.charTyped(c, mods);
-    }
 
-    @Override
-    public boolean isPauseScreen() { return false; }
 }

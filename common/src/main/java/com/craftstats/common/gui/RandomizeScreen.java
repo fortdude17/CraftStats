@@ -5,156 +5,125 @@ import com.craftstats.common.preset.Preset;
 import com.craftstats.common.preset.PresetManager;
 import com.craftstats.common.randomize.RandomizeManager;
 import com.craftstats.common.stats.*;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.util.Locale;
+import java.util.Objects;
 import java.util.UUID;
 
-public class RandomizeScreen extends Screen {
+/** Preview of a seeded randomization: original vs. randomized values, then confirm. */
+public class RandomizeScreen extends BaseScreen {
+
+    private static final int ROW_H = 11;
+    private static final int PAD   = 6;
 
     private final TargetType type;
     private final String     targetId;
-    private final Object     vanilla;
+    private final Object     base;
 
     private Object randomized;
-    private long   currentSeed;
-
+    private long   seed;
     private EditBox seedBox;
-    private Button  rerollBtn, confirmBtn, rerollAllBtn, savePresetBtn, cancelBtn;
+    private String status = "";
 
-    private static final int COL_W = 160;
-    private static final int ROW_H = 12;
-    private static final int PAD   = 6;
-
-    public RandomizeScreen(TargetType type, String targetId, Object vanillaStats) {
-        super(Component.literal("Randomize - " + targetId));
-        this.type      = type;
-        this.targetId  = targetId;
-        this.vanilla   = vanillaStats;
-        this.currentSeed = RandomizeManager.newSeed();
-        reroll();
+    public RandomizeScreen(TargetType type, String targetId, Object baseStats) {
+        super(Component.literal("Randomize " + targetId));
+        this.type = type;
+        this.targetId = targetId;
+        this.base = baseStats;
+        roll(RandomizeManager.newSeed());
     }
 
-    private void reroll() {
-        currentSeed = RandomizeManager.newSeed();
-        randomized  = randomizeWith(currentSeed);
-    }
-
-    private Object randomizeWith(long seed) {
-        return switch (type) {
-            case MOB    -> RandomizeManager.randomizeMob((MobStats) vanilla, seed);
-            case BLOCK  -> RandomizeManager.randomizeBlock((BlockStats) vanilla, seed);
-            case ITEM   -> RandomizeManager.randomizeItem((ItemStats) vanilla, seed);
-            case PLAYER -> RandomizeManager.randomizePlayer((PlayerStats) vanilla, seed);
+    private void roll(long newSeed) {
+        seed = newSeed;
+        randomized = switch (type) {
+            case MOB    -> RandomizeManager.randomizeMob((MobStats) base, seed);
+            case BLOCK  -> RandomizeManager.randomizeBlock((BlockStats) base, seed);
+            case ITEM   -> RandomizeManager.randomizeItem((ItemStats) base, seed);
+            case PLAYER -> RandomizeManager.randomizePlayer((PlayerStats) base, seed);
         };
     }
 
     @Override
     protected void init() {
-        int bw = 70, bh = 16;
-        int cx = this.width / 2;
-        int bottomY = this.height - bh - PAD * 2;
-
-        seedBox = new EditBox(this.font, cx - 60, bottomY - bh - PAD * 2, 120, bh,
-                Component.literal("Seed"));
-        seedBox.setMaxLength(20);
-        seedBox.setValue(String.valueOf(currentSeed));
+        int bw = 80, bh = 16, cx = this.width / 2;
+        int bottomY = this.height - bh - PAD;
+        seedBox = addRenderableWidget(new EditBox(this.font, cx - 70, bottomY - bh - PAD, 140, bh, Component.literal("Seed")));
+        seedBox.setMaxLength(19);
+        seedBox.setValue(String.valueOf(seed));
         seedBox.setResponder(v -> {
-            try { currentSeed = Long.parseLong(v); randomized = randomizeWith(currentSeed); }
-            catch (NumberFormatException ignored) {}
+            try { roll(Long.parseLong(v.trim())); } catch (NumberFormatException ignored) {}
         });
-
-        rerollBtn    = Button.builder(Component.literal("Reroll All"),  b -> { reroll(); seedBox.setValue(String.valueOf(currentSeed)); })
-                .bounds(cx - bw - PAD, bottomY, bw, bh).build();
-        confirmBtn   = Button.builder(Component.literal("Confirm"),     b -> apply())
-                .bounds(cx + PAD, bottomY, bw, bh).build();
-        cancelBtn    = Button.builder(Component.literal("Cancel"),      b -> onClose())
-                .bounds(PAD, bottomY, 50, bh).build();
-        savePresetBtn= Button.builder(Component.literal("Save Preset"), b -> saveAsPreset())
-                .bounds(this.width - 90 - PAD, bottomY, 90, bh).build();
-
-        addRenderableWidget(seedBox);
-        addRenderableWidget(rerollBtn);
-        addRenderableWidget(confirmBtn);
-        addRenderableWidget(cancelBtn);
-        addRenderableWidget(savePresetBtn);
+        addRenderableWidget(Button.builder(Component.literal("Cancel"), b -> onClose()).bounds(cx - bw * 2 - PAD * 2, bottomY, bw, bh).build());
+        addRenderableWidget(Button.builder(Component.literal("Reroll"), b -> {
+            roll(RandomizeManager.newSeed());
+            seedBox.setValue(String.valueOf(seed));
+        }).bounds(cx - bw - PAD, bottomY, bw, bh).build());
+        addRenderableWidget(Button.builder(Component.literal("Apply"), b -> apply()).bounds(cx, bottomY, bw, bh).build());
+        addRenderableWidget(Button.builder(Component.literal("Save Preset"), b -> saveAsPreset()).bounds(cx + bw + PAD, bottomY, bw, bh).build());
     }
 
     @Override
+    public void renderBackground(GuiGraphics g, int mx, int my, float delta) {}
+
+    @Override
     public void render(GuiGraphics g, int mx, int my, float delta) {
-        this.renderBackground(g, mx, my, delta);
-        g.fill(0, 0, this.width, this.height, 0xCC000000);
+        g.fill(0, 0, this.width, this.height, 0xFF0D0D1C);
+        g.drawCenteredString(font, "Randomize " + type.displayName().toLowerCase() + " " + targetId, this.width / 2, PAD, 0xFFFFFFFF);
+        g.drawCenteredString(font, "Intensity: " + RandomizeManager.getIntensity().name().toLowerCase(Locale.ROOT)
+                + " (change it in the config)", this.width / 2, PAD + 12, 0xFF888899);
 
-        g.drawCenteredString(this.font, "Randomize Preview — " + type.name() + " " + targetId,
-                this.width / 2, PAD, 0xFFFFFFFF);
-        g.drawCenteredString(this.font, "Seed: " + currentSeed,
-                this.width / 2, PAD + 12, 0xFFAAAAAA);
-
-        int startY = PAD + 28;
-        int leftX  = PAD + 20;
-        int rightX = this.width / 2 + PAD;
-        g.drawString(this.font, "ORIGINAL",   leftX,  startY, 0xFF888888, false);
-        g.drawString(this.font, "RANDOMIZED", rightX, startY, 0xFF44BB44, false);
-
-        if (vanilla != null && randomized != null) {
-            renderDiff(g, vanilla, randomized, leftX, rightX, startY + 14);
+        int leftX = this.width / 2 - 170, midX = this.width / 2 + 10, rightX = this.width / 2 + 100;
+        int y = PAD + 32;
+        g.drawString(font, "STAT", leftX, y, 0xFF888888, false);
+        g.drawString(font, "VANILLA", midX, y, 0xFF888888, false);
+        g.drawString(font, "RANDOM", rightX, y, 0xFF44BB44, false);
+        y += ROW_H + 2;
+        int maxY = this.height - 60;
+        for (Field f : base.getClass().getFields()) {
+            if (Modifier.isStatic(f.getModifiers()) || f.getName().equals("schema")) continue;
+            try {
+                Object before = f.get(base), after = f.get(randomized);
+                if (Objects.equals(before, after) || y > maxY) continue;
+                g.drawString(font, f.getName(), leftX, y, 0xFFCCCCCC, false);
+                g.drawString(font, fmt(before), midX, y, 0xFF999999, false);
+                g.drawString(font, fmt(after), rightX, y, 0xFF66FF66, false);
+                y += ROW_H;
+            } catch (IllegalAccessException ignored) {}
         }
-
+        if (!status.isEmpty()) g.drawCenteredString(font, status, this.width / 2, this.height - 58, 0xFF66DDFF);
         super.render(g, mx, my, delta);
     }
 
-    private void renderDiff(GuiGraphics g, Object orig, Object rand, int leftX, int rightX, int startY) {
-        java.lang.reflect.Field[] fields = orig.getClass().getFields();
-        int rowY = startY;
-        int bodyH = this.height - startY - 60;
-        for (java.lang.reflect.Field f : fields) {
-            if (rowY - startY > bodyH) break;
-            f.setAccessible(true);
-            try {
-                Object ov = f.get(orig);
-                Object rv = f.get(rand);
-                if (ov == null || rv == null) continue;
-                boolean changed = !ov.toString().equals(rv.toString());
-                int color = changed ? 0xFFFFAA44 : 0xFF888888;
-                String label = f.getName();
-                String oval  = formatVal(ov);
-                String rval  = formatVal(rv);
-                g.drawString(this.font, label + ": " + oval, leftX,  rowY, color, false);
-                g.drawString(this.font, rval,                rightX, rowY, changed ? 0xFF44FF44 : 0xFF888888, false);
-                rowY += ROW_H;
-            } catch (Exception ignored) {}
+    private static String fmt(Object v) {
+        if (v == null) return "-";
+        if (v instanceof Double || v instanceof Float) {
+            double d = ((Number) v).doubleValue();
+            return String.format(Locale.ROOT, "%.3f", d).replaceAll("0+$", "").replaceAll("\\.$", "");
         }
-    }
-
-    private String formatVal(Object v) {
-        if (v instanceof Double d)  return String.format("%.4f", d).replaceAll("0+$","").replaceAll("\\.$","");
-        if (v instanceof Float  f)  return String.format("%.4f", f).replaceAll("0+$","").replaceAll("\\.$","");
         return String.valueOf(v);
     }
 
     private void apply() {
-        switch (type) {
-            case MOB    -> CraftStatsNetwork.sendApplyMobStats(targetId, (MobStats) randomized);
-            case BLOCK  -> CraftStatsNetwork.sendApplyBlockStats(targetId, (BlockStats) randomized);
-            case ITEM   -> CraftStatsNetwork.sendApplyItemStats(targetId, (ItemStats) randomized);
-            case PLAYER -> CraftStatsNetwork.sendApplyPlayerStats(UUID.fromString(targetId), (PlayerStats) randomized);
-        }
+        CraftStatsNetwork.Kind kind = switch (type) {
+            case MOB -> CraftStatsNetwork.Kind.MOB;
+            case BLOCK -> CraftStatsNetwork.Kind.BLOCK;
+            case ITEM -> CraftStatsNetwork.Kind.ITEM;
+            case PLAYER -> CraftStatsNetwork.Kind.PLAYER;
+        };
+        String key = type == TargetType.PLAYER ? UUID.fromString(targetId).toString() : targetId;
+        CraftStatsNetwork.sendApply(kind, key, randomized);
         onClose();
     }
 
     private void saveAsPreset() {
-        String name = "rand_" + type.name().toLowerCase() + "_" + currentSeed;
-        Preset p = new Preset(name, type, randomized);
-        p.seed = currentSeed;
-        PresetManager.savePreset(p);
-        Minecraft.getInstance().player.sendSystemMessage(
-                net.minecraft.network.chat.Component.literal("Saved preset: " + name));
+        Preset p = new Preset("random_" + seed, type, randomized);
+        p.seed = seed;
+        status = PresetManager.save(p) ? "Saved preset " + p.name : "Could not save preset";
     }
-
-    @Override
-    public boolean isPauseScreen() { return false; }
 }

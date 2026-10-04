@@ -11,7 +11,6 @@ import net.minecraft.world.level.block.LadderBlock;
 import net.minecraft.world.level.block.MagmaBlock;
 import net.minecraft.world.level.block.PowderSnowBlock;
 import net.minecraft.world.level.block.ScaffoldingBlock;
-import net.minecraft.world.level.block.SlimeBlock;
 import net.minecraft.world.level.block.SoulSandBlock;
 import net.minecraft.world.level.block.SweetBerryBushBlock;
 import net.minecraft.world.level.block.VineBlock;
@@ -20,25 +19,19 @@ import net.minecraft.world.level.block.state.BlockBehaviour;
 
 public final class BlockStatExtractor {
 
+    /** The vanilla properties of a block, as a fully filled-in BlockStats. */
     public static BlockStats extractFrom(Block block) {
         BlockStats stats = new BlockStats();
 
-        try {
-            BlockBehaviour.Properties props =
-                    ((BlockBehaviourAccessor)(Object)block).craftstats$getBlockProperties();
-            BlockBehaviourPropertiesAccessor propsAcc =
-                    (BlockBehaviourPropertiesAccessor)(Object)props;
+        BlockBehaviour.Properties props = ((BlockBehaviourAccessor) block).craftstats$getBlockProperties();
+        BlockBehaviourPropertiesAccessor propsAcc = (BlockBehaviourPropertiesAccessor) props;
+        stats.hardness    = propsAcc.craftstats$getDestroyTime();
+        stats.noCollision = !propsAcc.craftstats$getHasCollision();
 
-            stats.hardness    = propsAcc.craftstats$getDestroyTime();
-            stats.noCollision = !propsAcc.craftstats$getHasCollision();
-        } catch (Exception ignored) {
-            stats.hardness    = 1.5f;
-            stats.noCollision = false;
-        }
-
-        stats.blastResistance = block.getExplosionResistance();
-        stats.slipperiness    = block.getFriction();
+        stats.blastResistance = ((BlockBehaviourAccessor) block).craftstats$getExplosionResistance();
+        stats.slipperiness    = ((BlockBehaviourAccessor) block).craftstats$getFriction();
         stats.lightEmission   = block.defaultBlockState().getLightEmission();
+        stats.pushReaction    = "normal";
 
         if (block instanceof LadderBlock || block instanceof VineBlock
                 || block instanceof ScaffoldingBlock) {
@@ -53,11 +46,6 @@ public final class BlockStatExtractor {
             stats.stepDamage = 1.0f;
         }
 
-        if (block instanceof SlimeBlock) {
-            stats.bounceFactor = 0.8f;
-            stats.slipperiness = 0.8f;
-        }
-
         if (block instanceof CampfireBlock || block instanceof FireBlock) {
             stats.stepDamage = 1.0f;
         }
@@ -68,7 +56,6 @@ public final class BlockStatExtractor {
 
         if (block instanceof HoneyBlock) {
             stats.speedModifier = 0.4f;
-            stats.bounceFactor  = 0.0f;
         }
 
         if (block instanceof WitherRoseBlock || block instanceof SweetBerryBushBlock) {

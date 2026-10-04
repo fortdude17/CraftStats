@@ -1,5 +1,6 @@
 package com.craftstats.common.mixin;
 
+import com.craftstats.common.client.ClientHooks;
 import com.craftstats.common.gui.CraftStatsScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -18,22 +19,14 @@ public abstract class PauseScreenMixin extends Screen {
 
     @Inject(method = "init", at = @At("TAIL"))
     private void craftstats$addButton(CallbackInfo ci) {
-        Minecraft mc = Minecraft.getInstance();
-
-        boolean singleplayer = mc.getSingleplayerServer() != null;
-        boolean canUse = singleplayer
-                || (mc.player != null && (mc.player.hasPermissions(2) || mc.player.isCreative()));
-        if (!canUse) return;
-
-        int maxBottom = this.height / 4 + 8;
-        for (var child : this.children()) {
-            if (child instanceof AbstractWidget w)
-                maxBottom = Math.max(maxBottom, w.getY() + w.getHeight());
-        }
-        addRenderableWidget(Button.builder(
-                Component.literal("CraftStats"),
-                b -> Minecraft.getInstance().setScreen(new CraftStatsScreen()))
-                .bounds(this.width / 2 - 100, maxBottom + 4, 200, 20)
+        if (!ClientHooks.mayEdit() || this.children().isEmpty()) return;
+        int bottom = this.height / 4 + 8;
+        for (var child : this.children())
+            if (child instanceof AbstractWidget w) bottom = Math.max(bottom, w.getY() + w.getHeight());
+        if (bottom + 24 > this.height) return;
+        addRenderableWidget(Button.builder(Component.literal("CraftStats"),
+                        b -> Minecraft.getInstance().setScreen(new CraftStatsScreen()))
+                .bounds(this.width / 2 - 102, bottom + 4, 204, 20)
                 .build());
     }
 }

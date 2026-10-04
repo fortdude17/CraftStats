@@ -1,10 +1,10 @@
 package com.craftstats.common.gui;
 
-import com.craftstats.common.gui.CraftStatsScreen;
 import com.craftstats.common.preset.Preset;
 import com.craftstats.common.preset.PresetManager;
-import com.craftstats.common.stats.*;
-import com.craftstats.common.util.JsonUtil;
+import com.craftstats.common.stats.StatSchema;
+import com.craftstats.common.stats.TargetType;
+import com.google.gson.JsonParser;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -13,176 +13,170 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 import java.util.List;
+import java.util.function.Consumer;
 
-public class PresetBrowserScreen extends Screen {
+/** Lists presets for one target type; loads one into the editor, saves, deletes, imports/exports JSON. */
+public class PresetBrowserScreen extends BaseScreen {
 
-    private final Screen        parent;
-    private final TargetType    targetType;
-    private final Object        currentStats;
-    private final String        targetId;
-
-    private List<Preset> presets;
-    private int          selectedIdx = -1;
-    private int          scrollOffset = 0;
-
-    private static final int ROW_H = 14;
+    private static final int ROW_H  = 14;
     private static final int LIST_X = 6;
     private static final int LIST_W = 180;
     private static final int PAD    = 6;
 
-    private Button loadBtn, deleteBtn, saveBtn, importBtn, exportBtn, closeBtn;
-    private EditBox importExportBox, nameBox;
+    private final Screen           parent;
+    private final TargetType       targetType;
+    private final Object           currentStats;
+    private final Consumer<Object> onLoad;
 
-    public PresetBrowserScreen(Screen parent, TargetType type, Object currentStats, String targetId) {
-        super(Component.literal("Preset Browser — " + type.name()));
-        this.parent       = parent;
-        this.targetType   = type;
+    private List<Preset> presets;
+    private int selected = -1;
+    private int scrollOffset;
+    private String message = "";
+    private int messageColor = 0xFFAAAAAA;
+
+    private Button loadBtn, deleteBtn, exportBtn;
+    private EditBox nameBox;
+
+    public PresetBrowserScreen(Screen parent, TargetType type, Object currentStats, Consumer<Object> onLoad) {
+        super(Component.literal("Presets - " + type.displayName()));
+        this.parent = parent;
+        this.targetType = type;
         this.currentStats = currentStats;
-        this.targetId     = targetId;
+        this.onLoad = onLoad;
     }
+
+    private int listTop()    { return PAD + 14; }
+    private int listBottom() { return this.height - 30; }
 
     @Override
     protected void init() {
         presets = PresetManager.getForType(targetType);
-        int bw = 60, bh = 14;
-        int rightX = LIST_X + LIST_W + PAD;
-        int rightY = PAD + 14;
+        int bw = 90, bh = 16;
+        int rx = LIST_X + LIST_W + PAD * 2;
+        int ry = listTop();
+        loadBtn   = addRenderableWidget(Button.builder(Component.literal("Load into Editor"), b -> loadSelected()).bounds(rx, ry, bw + 30, bh).build());
+        deleteBtn = addRenderableWidget(Button.builder(Component.literal("Delete"), b -> deleteSelected()).bounds(rx, ry + 20, bw, bh).build());
+        exportBtn = addRenderableWidget(Button.builder(Component.literal("Copy as JSON"), b -> exportSelected()).bounds(rx, ry + 40, bw, bh).build());
 
-        loadBtn   = Button.builder(Component.literal("Load"),   b -> loadSelected()).bounds(rightX, rightY,       bw, bh).build();
-        deleteBtn = Button.builder(Component.literal("Delete"), b -> deleteSelected()).bounds(rightX, rightY + 18, bw, bh).build();
-        saveBtn   = Button.builder(Component.literal("Save Current"), b -> saveCurrentAsPreset()).bounds(rightX, rightY + 36, bw + 20, bh).build();
-        importBtn = Button.builder(Component.literal("Import"), b -> importFromBox()).bounds(rightX, rightY + 54, bw, bh).build();
-        exportBtn = Button.builder(Component.literal("Export"), b -> exportToBox()).bounds(rightX + bw + 4, rightY + 54, bw, bh).build();
-        closeBtn  = Button.builder(Component.literal("Close"),  b -> onClose()).bounds(this.width - 60 - PAD, this.height - bh - PAD, 60, bh).build();
+        nameBox = addRenderableWidget(new EditBox(this.font, rx, ry + 80, 150, bh, Component.literal("Preset name")));
+        nameBox.setMaxLength(48);
+        nameBox.setHint(Component.literal("name for new preset").withStyle(s -> s.withColor(0x707080)));
+        addRenderableWidget(Button.builder(Component.literal("Save Current Values"), b -> saveCurrent()).bounds(rx, ry + 100, bw + 30, bh).build());
+        addRenderableWidget(Button.builder(Component.literal("Paste JSON as Preset"), b -> importClipboard()).bounds(rx, ry + 130, bw + 30, bh).build());
+        addRenderableWidget(Button.builder(Component.literal("Back"), b -> onClose()).bounds(this.width - 60 - PAD, this.height - 22, 60, bh).build());
+        updateButtons();
+    }
 
-        nameBox = new EditBox(this.font, rightX, rightY + 74, 130, bh, Component.literal("Preset name"));
-        nameBox.setMaxLength(64);
+    private void updateButtons() {
+        boolean has = selected >= 0 && selected < presets.size();
+        loadBtn.active = has;
+        exportBtn.active = has;
+        deleteBtn.active = has && !presets.get(selected).readonly;
+    }
 
-        importExportBox = new EditBox(this.font, PAD, this.height - bh * 3 - PAD * 2, this.width - PAD * 2, bh * 2,
-                Component.literal("Import/Export JSON"));
-        importExportBox.setMaxLength(8192);
-
-        addRenderableWidget(loadBtn);
-        addRenderableWidget(deleteBtn);
-        addRenderableWidget(saveBtn);
-        addRenderableWidget(importBtn);
-        addRenderableWidget(exportBtn);
-        addRenderableWidget(closeBtn);
-        addRenderableWidget(nameBox);
-        addRenderableWidget(importExportBox);
+    private void say(String text, int color) {
+        message = text;
+        messageColor = color;
     }
 
     @Override
+    public void renderBackground(GuiGraphics g, int mx, int my, float delta) {}
+
+    @Override
     public void render(GuiGraphics g, int mx, int my, float delta) {
-        this.renderBackground(g, mx, my, delta);
-        g.fill(0, 0, this.width, this.height, 0xCC000000);
-        g.fill(LIST_X, PAD + 12, LIST_X + LIST_W, this.height - 70, 0xFF1A1A2E);
+        g.fill(0, 0, this.width, this.height, 0xFF0D0D1C);
+        g.drawString(font, "Presets - " + targetType.displayName(), LIST_X, PAD, 0xFFFFFFFF, false);
+        g.fill(LIST_X, listTop(), LIST_X + LIST_W, listBottom(), 0xFF1A1A2E);
+        CraftStatsScreen.border(g, LIST_X, listTop(), LIST_X + LIST_W, listBottom());
 
-        g.drawString(this.font, "Presets — " + targetType.name(), LIST_X, PAD, 0xFFFFFFFF, false);
-
-        int listH = this.height - 70 - PAD - 12;
-        int visRows = listH / ROW_H;
-        g.enableScissor(LIST_X, PAD + 12, LIST_X + LIST_W, PAD + 12 + listH);
-        for (int i = scrollOffset; i < Math.min(presets.size(), scrollOffset + visRows); i++) {
-            Preset p  = presets.get(i);
-            int ry = PAD + 12 + (i - scrollOffset) * ROW_H;
-            boolean sel = i == selectedIdx;
-            if (sel) g.fill(LIST_X, ry, LIST_X + LIST_W, ry + ROW_H, 0xFF0F3460);
-            String label = (p.readonly ? "[R] " : "     ") + p.name;
-            g.drawString(this.font, label, LIST_X + 2, ry + 3, sel ? 0xFFFFFFFF : 0xFFCCCCCC, false);
+        int visible = (listBottom() - listTop()) / ROW_H;
+        g.enableScissor(LIST_X, listTop(), LIST_X + LIST_W, listBottom());
+        for (int i = scrollOffset; i < Math.min(presets.size(), scrollOffset + visible + 1); i++) {
+            Preset p = presets.get(i);
+            int ry = listTop() + (i - scrollOffset) * ROW_H;
+            if (i == selected) g.fill(LIST_X, ry, LIST_X + LIST_W, ry + ROW_H, 0xFF3344BB);
+            String label = (p.readonly ? "[built-in] " : "") + p.name.replace('_', ' ');
+            g.drawString(font, font.plainSubstrByWidth(label, LIST_W - 6), LIST_X + 3, ry + 3,
+                    p.readonly ? 0xFF99AACC : 0xFFFFFFFF, false);
         }
         g.disableScissor();
 
-        if (selectedIdx >= 0 && selectedIdx < presets.size()) {
-            g.drawString(this.font, "Selected: " + presets.get(selectedIdx).name,
-                    LIST_X + LIST_W + PAD, PAD, 0xFF44CCFF, false);
-        }
-
+        int rx = LIST_X + LIST_W + PAD * 2;
+        g.drawString(font, "New preset from the values in the editor:", rx, listTop() + 68, 0xFFAAAAAA, false);
+        if (!message.isEmpty()) g.drawString(font, message, rx, listTop() + 155, messageColor, false);
         super.render(g, mx, my, delta);
     }
 
     @Override
-    public boolean mouseClicked(double mx, double my, int btn) {
-        int listH = this.height - 70 - PAD - 12;
-        if (mx >= LIST_X && mx < LIST_X + LIST_W && my >= PAD + 12 && my < PAD + 12 + listH) {
-            int row = ((int) my - PAD - 12) / ROW_H + scrollOffset;
-            if (row >= 0 && row < presets.size()) { selectedIdx = row; return true; }
+    protected boolean onMouseClicked(double mx, double my, int btn) {
+        if (mx >= LIST_X && mx < LIST_X + LIST_W && my >= listTop() && my < listBottom()) {
+            int row = ((int) my - listTop()) / ROW_H + scrollOffset;
+            if (row >= 0 && row < presets.size()) {
+                selected = row;
+                updateButtons();
+            }
+            return true;
         }
-        return super.mouseClicked(mx, my, btn);
+        return false;
     }
 
     @Override
     public boolean mouseScrolled(double mx, double my, double h, double v) {
-        int listH = this.height - 70 - PAD - 12;
-        if (mx >= LIST_X && mx < LIST_X + LIST_W) {
-            int maxScroll = Math.max(0, presets.size() - listH / ROW_H);
-            scrollOffset = (int) Math.max(0, Math.min(maxScroll, scrollOffset - v * 3));
-            return true;
-        }
-        return super.mouseScrolled(mx, my, h, v);
+        int visible = (listBottom() - listTop()) / ROW_H;
+        scrollOffset = (int) Math.max(0, Math.min(Math.max(0, presets.size() - visible), scrollOffset - v * 3));
+        return true;
     }
 
     private void loadSelected() {
-        if (selectedIdx < 0 || selectedIdx >= presets.size()) return;
-        Preset p = presets.get(selectedIdx);
-        if (p.targetType != targetType) {
-            Minecraft.getInstance().player.sendSystemMessage(
-                    Component.literal("Type mismatch: preset is " + p.targetType));
-            return;
-        }
-
-        if (parent instanceof CraftStatsScreen cs) {
-            switch (targetType) {
-                case MOB    -> cs.selectMobById(targetId);
-                case BLOCK  -> cs.selectBlockById(targetId);
-                case ITEM   -> cs.selectItemById(targetId);
-            }
-        }
+        if (selected < 0 || selected >= presets.size()) return;
+        onLoad.accept(presets.get(selected).copyStats());
         onClose();
     }
 
     private void deleteSelected() {
-        if (selectedIdx < 0 || selectedIdx >= presets.size()) return;
-        Preset p = presets.get(selectedIdx);
-        if (p.readonly) {
-            Minecraft.getInstance().player.sendSystemMessage(Component.literal("Cannot delete built-in preset."));
-            return;
-        }
-        PresetManager.deletePreset(p.name);
+        if (selected < 0 || selected >= presets.size()) return;
+        Preset p = presets.get(selected);
+        if (PresetManager.delete(p)) say("Deleted '" + p.name + "'", 0xFF66DD66);
         presets = PresetManager.getForType(targetType);
-        selectedIdx = -1;
+        selected = -1;
+        updateButtons();
     }
 
-    private void saveCurrentAsPreset() {
+    private void exportSelected() {
+        if (selected < 0 || selected >= presets.size()) return;
+        Minecraft.getInstance().keyboardHandler.setClipboard(StatSchema.GSON.toJson(presets.get(selected).toJson()));
+        say("Copied preset JSON to clipboard", 0xFF66DD66);
+    }
+
+    private void saveCurrent() {
         String name = nameBox.getValue().trim();
-        if (name.isEmpty()) name = "preset_" + System.currentTimeMillis();
-        Preset p = new Preset(name, targetType, currentStats);
-        PresetManager.savePreset(p);
+        if (name.isEmpty()) { say("Enter a name first", 0xFFFF6666); return; }
+        Preset p = new Preset(name, targetType, StatSchema.parse(targetType, StatSchema.GSON_COMPACT.toJsonTree(currentStats)));
+        if (!PresetManager.save(p)) { say("That name is taken by a built-in preset", 0xFFFF6666); return; }
         presets = PresetManager.getForType(targetType);
+        selected = presets.indexOf(p);
+        nameBox.setValue("");
+        updateButtons();
+        say("Saved '" + name + "'", 0xFF66DD66);
     }
 
-    private void importFromBox() {
-        String json = importExportBox.getValue().trim();
-        if (json.isEmpty()) return;
+    private void importClipboard() {
         try {
-            Preset p = JsonUtil.GSON.fromJson(json, Preset.class);
-            if (p != null && p.name != null) PresetManager.savePreset(p);
+            Preset p = Preset.fromJson(JsonParser.parseString(Minecraft.getInstance().keyboardHandler.getClipboard()));
+            if (p.targetType != targetType) {
+                say("That is a " + p.targetType.displayName().toLowerCase() + " preset, not " + targetType.displayName().toLowerCase(), 0xFFFF6666);
+                return;
+            }
+            if (!PresetManager.save(p)) { say("That name is taken by a built-in preset", 0xFFFF6666); return; }
             presets = PresetManager.getForType(targetType);
+            say("Imported '" + p.name + "'", 0xFF66DD66);
         } catch (Exception e) {
-            Minecraft.getInstance().player.sendSystemMessage(Component.literal("Invalid preset JSON."));
+            say("Clipboard doesn't contain a CraftStats preset", 0xFFFF6666);
         }
-    }
-
-    private void exportToBox() {
-        if (selectedIdx < 0 || selectedIdx >= presets.size()) return;
-        importExportBox.setValue(JsonUtil.toJson(presets.get(selectedIdx)));
     }
 
     @Override
     public void onClose() {
         Minecraft.getInstance().setScreen(parent);
     }
-
-    @Override
-    public boolean isPauseScreen() { return false; }
 }

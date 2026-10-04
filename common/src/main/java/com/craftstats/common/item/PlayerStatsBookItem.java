@@ -1,60 +1,56 @@
 package com.craftstats.common.item;
 
-import com.craftstats.common.stats.PlayerStats;
-import com.craftstats.common.stats.StatRegistry;
-import com.craftstats.common.util.ScreenOpener;
-import net.minecraft.ChatFormatting;
+import com.craftstats.common.client.ClientHooks;
+import dev.architectury.platform.Platform;
+import dev.architectury.utils.Env;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResultHolder;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
-
+//#if MC >= 1.21.5
+//$ import net.minecraft.world.item.component.TooltipDisplay;
+//$ import java.util.function.Consumer;
+//#else
 import java.util.List;
+//#endif
+//#if MC < 1.21.2
+import net.minecraft.world.InteractionResultHolder;
+//#endif
 
+/** Opens the player stats editor for yourself. */
 public class PlayerStatsBookItem extends Item {
 
     public PlayerStatsBookItem(Properties props) {
         super(props);
     }
 
+    //#if MC >= 1.21.2
+    //$ @Override
+    //$ public InteractionResult use(Level level, Player player, InteractionHand hand) {
+    //$     if (level.isClientSide()) ClientHooks.openPlayerEditor(player);
+    //$     return InteractionResult.SUCCESS;
+    //$ }
+    //#else
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
-        if (level.isClientSide) {
-            ScreenOpener.openPlayerEditor(player);
-        }
-        return InteractionResultHolder.sidedSuccess(player.getItemInHand(hand), level.isClientSide);
+        if (level.isClientSide()) ClientHooks.openPlayerEditor(player);
+        return InteractionResultHolder.sidedSuccess(player.getItemInHand(hand), level.isClientSide());
     }
+    //#endif
 
+    //#if MC >= 1.21.5
+    //$ @Override
+    //$ public void appendHoverText(ItemStack stack, TooltipContext ctx, TooltipDisplay display, Consumer<Component> lines, TooltipFlag flag) {
+    //$     if (Platform.getEnvironment() == Env.CLIENT) ClientHooks.appendBookTooltip(lines);
+    //$ }
+    //#else
     @Override
-    public void appendHoverText(ItemStack stack, TooltipContext ctx,
-                                 List<Component> lines, TooltipFlag flag) {
-        lines.add(Component.literal("Right-click to edit your stats").withStyle(ChatFormatting.GRAY));
-        lines.add(Component.empty());
-
-        try {
-            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
-            if (mc.player != null) {
-                PlayerStats ps = StatRegistry.getPlayer(mc.player.getUUID());
-                if (ps != null) {
-                    lines.add(Component.literal("Current overrides:").withStyle(ChatFormatting.YELLOW));
-                    lines.add(Component.literal("  HP: " + ps.maxHealth
-                            + "  Dmg: " + ps.baseDamage
-                            + "  Speed: " + ps.walkSpeed)
-                            .withStyle(ChatFormatting.WHITE));
-                    if (ps.godMode)        lines.add(Component.literal("  ★ God Mode").withStyle(ChatFormatting.GOLD));
-                    if (ps.noFallDamage)   lines.add(Component.literal("  ★ No Fall Damage").withStyle(ChatFormatting.AQUA));
-                    if (ps.keepInventory)  lines.add(Component.literal("  ★ Keep Inventory").withStyle(ChatFormatting.GREEN));
-                    if (ps.fireImmune)     lines.add(Component.literal("  ★ Fire Immune").withStyle(ChatFormatting.RED));
-                    if (ps.infiniteItems)  lines.add(Component.literal("  ★ Infinite Items").withStyle(ChatFormatting.LIGHT_PURPLE));
-                } else {
-                    lines.add(Component.literal("No active overrides — vanilla stats")
-                            .withStyle(ChatFormatting.DARK_GRAY));
-                }
-            }
-        } catch (Exception ignored) {}
+    public void appendHoverText(ItemStack stack, TooltipContext ctx, List<Component> lines, TooltipFlag flag) {
+        if (Platform.getEnvironment() == Env.CLIENT) ClientHooks.appendBookTooltip(lines::add);
     }
+    //#endif
 }

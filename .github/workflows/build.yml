@@ -8,7 +8,12 @@ on:
 
 jobs:
   build:
+    name: Minecraft ${{ matrix.mc }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        mc: ['1.21.1', '1.21.11']
     steps:
       - uses: actions/checkout@v5
 
@@ -22,7 +27,7 @@ jobs:
       - name: Build
         run: |
           chmod +x gradlew
-          ./gradlew build --stacktrace
+          ./gradlew build -Pmc=${{ matrix.mc }} --stacktrace
 
       - name: Collect jars
         run: |
@@ -30,13 +35,13 @@ jobs:
           for loader in fabric neoforge; do
             for jar in "$loader"/build/libs/*.jar; do
               case "$jar" in *-dev*|*-sources*) continue ;; esac
-              cp "$jar" "dist/$(basename "${jar%.jar}")-$loader.jar"
+              cp "$jar" dist/
             done
           done
           ls -l dist
 
       - uses: actions/upload-artifact@v5
         with:
-          name: craftstats-jars
+          name: craftstats-mc${{ matrix.mc }}
           path: dist/*.jar
           if-no-files-found: error

@@ -1,3 +1,4 @@
+
 package com.craftstats.common.registry;
 
 import com.craftstats.common.CraftStats;
@@ -15,17 +16,20 @@ public final class ModCreativeTab {
             DeferredRegister.create(CraftStats.MOD_ID, Registries.CREATIVE_MODE_TAB);
 
     public static final RegistrySupplier<CreativeModeTab> CRAFTSTATS_TAB = TABS.register(
-            "craftstats", () -> CreativeTabRegistry.create(
-                    Component.translatable("itemGroup.craftstats"),
-                    () -> ModItems.CRAFT_WAND.get().getDefaultInstance()
-            )
+            "craftstats", () -> CreativeTabRegistry.create(builder -> {
+                builder.title(Component.translatable("itemGroup.craftstats"));
+                builder.icon(() -> ModItems.CRAFT_WAND.get().getDefaultInstance());
+                // Register the entries as part of tab construction rather than modifying
+                // the completed tab afterwards. This avoids the separate Architectury
+                // modify callback implicated in the NeoForge creative-inventory crash.
+                builder.displayItems((parameters, output) -> {
+                    output.accept(ModItems.CRAFT_WAND.get());
+                    output.accept(ModItems.PLAYER_STATS_BOOK.get());
+                });
+            })
     );
 
     public static void register() {
         TABS.register();
-        CreativeTabRegistry.modify(CRAFTSTATS_TAB, (flags, output, canSeeOp) -> {
-            output.accept(ModItems.CRAFT_WAND.get());
-            output.accept(ModItems.PLAYER_STATS_BOOK.get());
-        });
     }
 }
